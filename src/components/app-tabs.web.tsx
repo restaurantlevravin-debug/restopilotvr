@@ -4,45 +4,32 @@ import {
   Tabs,
   TabSlot,
   TabTrigger,
-  TabTriggerSlotProps,
 } from "expo-router/ui";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 export default function AppTabs() {
   return (
     <Tabs>
-      <TabSlot style={{ flex: 1 }} />
+      <TabSlot />
 
       <TabList asChild>
         <CustomTabList>
+
           <TabTrigger name="home" href="/" asChild>
-            <TabButton>Accueil</TabButton>
+            <Pressable style={styles.button}>
+              <Text style={styles.text}>Accueil</Text>
+            </Pressable>
           </TabTrigger>
 
           <TabTrigger name="personnel" href="/personnel" asChild>
-            <TabButton>Personnel</TabButton>
+            <Pressable style={styles.button}>
+              <Text style={styles.text}>Personnel</Text>
+            </Pressable>
           </TabTrigger>
+
         </CustomTabList>
       </TabList>
     </Tabs>
-  );
-}
-
-function TabButton({
-  children,
-  isFocused,
-  ...props
-}: TabTriggerSlotProps) {
-  return (
-    <Pressable {...props}>
-      <View
-        style={[
-          styles.button,
-          isFocused && styles.buttonSelected,
-        ]}>
-        <Text style={styles.text}>{children}</Text>
-      </View>
-    </Pressable>
   );
 }
 
@@ -69,10 +56,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 10,
-  },
-
-  buttonSelected: {
-    backgroundColor: "#004D40",
   },
 
   text: {

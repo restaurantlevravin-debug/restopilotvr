@@ -27,9 +27,11 @@ export default function Home() {
         <Text style={styles.buttonText}>📅 Planning</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button}>
-        <Text style={styles.buttonText}>🌡️ HACCP</Text>
-      </TouchableOpacity>
+      <Link href="/haccp" asChild>
+        <TouchableOpacity style={styles.button}>
+          <Text style={styles.buttonText}>📋 HACCP</Text>
+        </TouchableOpacity>
+      </Link>
 
       <TouchableOpacity style={styles.button}>
         <Text style={styles.buttonText}>📖 Fiches techniques</Text>
