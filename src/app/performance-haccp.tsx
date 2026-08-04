@@ -5,6 +5,7 @@ import { useHaccp } from "@/context/HaccpContext";
 export default function PerformanceHaccp() {
   const { scoreHaccp } = useHaccp();
   const tauxConformite = scoreHaccp.nombreReleves === 0 ? 0 : Math.round((scoreHaccp.nombreConformes / scoreHaccp.nombreReleves) * 100);
+  const prochainGrade = scoreHaccp.grade === "PADAWAN HACCP" ? "MONSTRE HACCP : 100 relevés conformes à 95%" : scoreHaccp.grade === "MONSTRE HACCP" ? "EMPEREUR HACCP : 500 relevés conformes à 98%" : "Niveau maximum atteint";
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -12,6 +13,12 @@ export default function PerformanceHaccp() {
       <View style={styles.scoreCard}>
         <Text style={styles.scoreLabel}>Score total</Text>
         <Text style={styles.score}>{scoreHaccp.totalPoints} pts</Text>
+      </View>
+
+      <View style={styles.levelCard}>
+        <Text style={styles.levelTitle}>🏆 Niveau HACCP</Text>
+        <Text style={styles.grade}>{scoreHaccp.grade}</Text>
+        <Text style={styles.progress}>Progression : {prochainGrade}</Text>
       </View>
 
       <View style={styles.statsCard}>
@@ -49,6 +56,10 @@ const styles = StyleSheet.create({
   scoreCard: { alignItems: "center", backgroundColor: "#00695C", borderRadius: 18, padding: 26, marginBottom: 18 },
   scoreLabel: { color: "#D7F1EC", fontSize: 18 },
   score: { color: "#FFFFFF", fontSize: 40, fontWeight: "bold", marginTop: 6 },
+  levelCard: { backgroundColor: "#081A24", borderColor: "#B08D57", borderRadius: 15, borderWidth: 1, marginBottom: 18, padding: 18 },
+  levelTitle: { color: "#D4AF37", fontSize: 19, fontWeight: "bold" },
+  grade: { color: "#FFFFFF", fontSize: 24, fontWeight: "bold", marginTop: 8 },
+  progress: { color: "#C9DDE0", lineHeight: 20, marginTop: 8 },
   statsCard: { flexDirection: "row", backgroundColor: "#FFFFFF", borderRadius: 15, paddingVertical: 18, marginBottom: 18 },
   stat: { flex: 1, alignItems: "center", paddingHorizontal: 6 },
   statValue: { color: "#00695C", fontSize: 24, fontWeight: "bold" },

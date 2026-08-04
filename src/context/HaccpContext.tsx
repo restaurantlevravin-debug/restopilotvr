@@ -61,7 +61,13 @@ export type ScoreHaccp = {
   nombreReleves:number;
   nombreConformes:number;
   nombrePhotos:number;
+  relevesConformes:number;
+  grade:GradeHaccp;
+  recompensesDebloquees:GradeHaccp[];
+  oublisCritiques:number;
 };
+
+export type GradeHaccp = "PADAWAN HACCP" | "MONSTRE HACCP" | "EMPEREUR HACCP";
 
 type DonneesHaccp = {
   releves:ReleveTemperature[];
@@ -99,6 +105,10 @@ const DONNEES_DEFAUT:DonneesHaccp = {
     nombreReleves:0,
     nombreConformes:0,
     nombrePhotos:0,
+    relevesConformes:0,
+    grade:"PADAWAN HACCP",
+    recompensesDebloquees:[],
+    oublisCritiques:0,
   },
 };
 
@@ -166,6 +176,14 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
         nombreReleves:donneesChargees.scoreHaccp?.nombreReleves ?? donneesChargees.releves?.length ?? 0,
         nombreConformes:donneesChargees.scoreHaccp?.nombreConformes ?? donneesChargees.releves?.filter((releve) => releve.conforme).length ?? 0,
         nombrePhotos:donneesChargees.scoreHaccp?.nombrePhotos ?? donneesChargees.releves?.filter((releve) => Boolean(releve.photo)).length ?? 0,
+        relevesConformes:donneesChargees.scoreHaccp?.relevesConformes ?? donneesChargees.scoreHaccp?.nombreConformes ?? donneesChargees.releves?.filter((releve) => releve.conforme).length ?? 0,
+        grade:donneesChargees.scoreHaccp?.grade ?? determinerGrade({
+          relevesConformes:donneesChargees.scoreHaccp?.relevesConformes ?? donneesChargees.scoreHaccp?.nombreConformes ?? donneesChargees.releves?.filter((releve) => releve.conforme).length ?? 0,
+          nombreReleves:donneesChargees.scoreHaccp?.nombreReleves ?? donneesChargees.releves?.length ?? 0,
+          oublisCritiques:donneesChargees.scoreHaccp?.oublisCritiques ?? 0,
+        }),
+        recompensesDebloquees:donneesChargees.scoreHaccp?.recompensesDebloquees ?? [],
+        oublisCritiques:donneesChargees.scoreHaccp?.oublisCritiques ?? 0,
       };
       const donneesNormalisees:DonneesHaccp = {
         releves:donneesChargees.releves || [],
@@ -204,17 +222,13 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
   async function ajouterReleve(releve:Omit<ReleveTemperature,"id">){
 
     const points = calculerPointsReleve(releve);
+    const progression = calculerProgressionHaccp(donnees.scoreHaccp, releve.conforme, Boolean(releve.photo), points);
 
     await sauvegarder({
       ...donnees,
       releves:[...donnees.releves, { id:Date.now(), ...releve }],
-      score:donnees.score + points,
-      scoreHaccp:{
-        totalPoints:donnees.scoreHaccp.totalPoints + points,
-        nombreReleves:donnees.scoreHaccp.nombreReleves + 1,
-        nombreConformes:donnees.scoreHaccp.nombreConformes + (releve.conforme ? 1 : 0),
-        nombrePhotos:donnees.scoreHaccp.nombrePhotos + (releve.photo ? 1 : 0),
-      },
+      score:donnees.score + points + progression.pointsRecompense,
+      scoreHaccp:progression.scoreHaccp,
     });
 
   }
@@ -371,6 +385,68 @@ export function calculerPointsReleve(
   const pointsPreuve = releve.dansCreneau && releve.photo ? 3 : 0;
 
   return pointsReleve + pointsConformite + pointsPreuve;
+}
+
+function determinerGrade({
+  relevesConformes,
+  nombreReleves,
+  oublisCritiques,
+}:{ relevesConformes:number; nombreReleves:number; oublisCritiques:number }):GradeHaccp {
+  const tauxConformite = nombreReleves === 0 ? 0 : (relevesConformes / nombreReleves) * 100;
+
+  if (relevesConformes >= 500 && tauxConformite >= 98 && oublisCritiques === 0) {
+    return "EMPEREUR HACCP";
+  }
+
+  if (relevesConformes >= 100 && tauxConformite >= 95) {
+    return "MONSTRE HACCP";
+  }
+
+  return "PADAWAN HACCP";
+}
+
+export function calculerProgressionHaccp(
+  scoreHaccp:ScoreHaccp,
+  releveConforme:boolean,
+  releveAvecPhoto:boolean,
+  pointsValidation:number
+){
+  const relevesConformes = scoreHaccp.relevesConformes + (releveConforme ? 1 : 0);
+  const nombreReleves = scoreHaccp.nombreReleves + 1;
+  const grade = determinerGrade({ relevesConformes, nombreReleves, oublisCritiques:scoreHaccp.oublisCritiques });
+  const recompensesDebloquees = [...scoreHaccp.recompensesDebloquees];
+  let recompenseDebloquee:GradeHaccp | undefined;
+  let pointsRecompense = 0;
+
+  if (releveConforme && !recompensesDebloquees.includes("PADAWAN HACCP") && relevesConformes >= 1) {
+    recompenseDebloquee = "PADAWAN HACCP";
+    pointsRecompense = 10;
+  } else if (grade === "MONSTRE HACCP" && !recompensesDebloquees.includes("MONSTRE HACCP")) {
+    recompenseDebloquee = "MONSTRE HACCP";
+    pointsRecompense = 50;
+  } else if (grade === "EMPEREUR HACCP" && !recompensesDebloquees.includes("EMPEREUR HACCP")) {
+    recompenseDebloquee = "EMPEREUR HACCP";
+    pointsRecompense = 200;
+  }
+
+  if (recompenseDebloquee) {
+    recompensesDebloquees.push(recompenseDebloquee);
+  }
+
+  return {
+    pointsRecompense,
+    recompenseDebloquee,
+    scoreHaccp:{
+      ...scoreHaccp,
+      totalPoints:scoreHaccp.totalPoints + pointsValidation + pointsRecompense,
+      nombreReleves,
+      nombreConformes:scoreHaccp.nombreConformes + (releveConforme ? 1 : 0),
+      nombrePhotos:scoreHaccp.nombrePhotos + (releveAvecPhoto ? 1 : 0),
+      relevesConformes,
+      grade,
+      recompensesDebloquees,
+    },
+  };
 }
 
 export function obtenirStatutCreneau(periode:PeriodeReleve, maintenant:Date){

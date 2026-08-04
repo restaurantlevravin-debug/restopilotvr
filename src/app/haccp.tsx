@@ -12,6 +12,7 @@ import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 
 import {
+  calculerProgressionHaccp,
   calculerPointsReleve,
   HORAIRE_RELEVE_MATIN,
   HORAIRE_RELEVE_SOIR,
@@ -19,6 +20,8 @@ import {
   useHaccp,
 } from "@/context/HaccpContext";
 import { HaccpValidationModal } from "@/components/HaccpValidationModal";
+import { HaccpRewardModal } from "@/components/HaccpRewardModal";
+import type { GradeHaccp } from "@/context/HaccpContext";
 
 type ValidationHaccp = {
   temperature: string;
@@ -32,6 +35,11 @@ type ValidationHaccp = {
   photoUri?: string;
 };
 
+type RecompenseHaccp = {
+  grade: GradeHaccp;
+  pointsGagnes: number;
+};
+
 function valeurInitialeDate() {
   return new Date().toLocaleDateString("fr-FR");
 }
@@ -39,6 +47,7 @@ function valeurInitialeDate() {
 export default function Haccp() {
   const {
     notifications,
+    scoreHaccp,
     ajouterReleve,
     ajouterTrace,
     ajouterAction,
@@ -49,6 +58,7 @@ export default function Haccp() {
   const [afficherTrace, setAfficherTrace] = useState(false);
   const [afficherAction, setAfficherAction] = useState(false);
   const [validationHaccp, setValidationHaccp] = useState<ValidationHaccp | null>(null);
+  const [recompenseHaccp, setRecompenseHaccp] = useState<RecompenseHaccp | null>(null);
 
   const [periode, setPeriode] = useState<"matin" | "soir">("matin");
   const [temperature, setTemperature] = useState("");
@@ -87,6 +97,8 @@ export default function Haccp() {
     const dateReelle = maintenant.toLocaleDateString("fr-FR");
     const heureReelle = maintenant.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
     const statutCreneau = obtenirStatutCreneau(periode, maintenant);
+    const pointsValidation = calculerPointsReleve({ conforme, photo: photoPreuveReleve || undefined, ...statutCreneau });
+    const progression = calculerProgressionHaccp(scoreHaccp, conforme, Boolean(photoPreuveReleve), pointsValidation);
 
     await ajouterReleve({
       periode,
@@ -105,10 +117,17 @@ export default function Haccp() {
       heure: heureReelle,
       responsable: responsableReleve,
       conforme,
-      points: calculerPointsReleve({ conforme, photo: photoPreuveReleve || undefined, ...statutCreneau }),
+      points: pointsValidation,
       photoUri: photoPreuveReleve || undefined,
       ...statutCreneau,
     });
+
+    if (conforme && progression.recompenseDebloquee) {
+      setRecompenseHaccp({
+        grade: progression.recompenseDebloquee,
+        pointsGagnes: progression.pointsRecompense,
+      });
+    }
 
     if (!conforme) {
       setProbleme(`Température non conforme : ${temperature} (${periode}).`);
@@ -345,6 +364,12 @@ export default function Haccp() {
         heurePrevue={validationHaccp?.heurePrevue ?? ""}
         photoUri={validationHaccp?.photoUri}
         onClose={() => setValidationHaccp(null)}
+      />
+      <HaccpRewardModal
+        visible={recompenseHaccp !== null && validationHaccp === null}
+        grade={recompenseHaccp?.grade ?? scoreHaccp.grade}
+        pointsGagnes={recompenseHaccp?.pointsGagnes ?? 0}
+        onContinue={() => setRecompenseHaccp(null)}
       />
     </>
   );
