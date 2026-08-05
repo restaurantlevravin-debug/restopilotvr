@@ -7,7 +7,7 @@ type HaccpRewardModalProps = {
   visible: boolean;
   grade: GradeHaccp;
   pointsGagnes: number;
-  onContinue: () => void;
+  onClose: () => void;
 };
 
 const illustrations: Record<GradeHaccp, number> = {
@@ -32,7 +32,7 @@ function messageGrade(grade: GradeHaccp) {
   return "Grâce à ta rigueur, tu fais grandir l’Empire de la Conformité.";
 }
 
-export function HaccpRewardModal({ visible, grade, pointsGagnes, onContinue }: HaccpRewardModalProps) {
+export function HaccpRewardModal({ visible, grade, pointsGagnes, onClose }: HaccpRewardModalProps) {
   const apparition = useRef(new Animated.Value(0)).current;
   const lumiere = useRef(new Animated.Value(0)).current;
 
@@ -56,7 +56,7 @@ export function HaccpRewardModal({ visible, grade, pointsGagnes, onContinue }: H
   }, [apparition, lumiere, visible]);
 
   return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onContinue}>
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Animated.View style={[styles.light, { opacity: lumiere }]} />
         <Animated.View style={[styles.card, { opacity: apparition, transform: [{ scale: apparition.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }] }]}>
@@ -66,7 +66,7 @@ export function HaccpRewardModal({ visible, grade, pointsGagnes, onContinue }: H
           <Text style={styles.grade}>{grade}</Text>
           <Text style={styles.message}>{messageGrade(grade)}</Text>
           <View style={styles.scoreRow}><View><Text style={styles.scoreLabel}>POINTS DE RÉCOMPENSE</Text><Text style={styles.points}>+{pointsGagnes}</Text></View></View>
-          <Pressable style={styles.button} onPress={onContinue}><Text style={styles.buttonText}>Continuer</Text></Pressable>
+          <Pressable style={styles.button} onPress={onClose}><Text style={styles.buttonText}>Continuer</Text></Pressable>
         </Animated.View>
       </View>
     </Modal>

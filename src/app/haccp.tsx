@@ -369,7 +369,7 @@ export default function Haccp() {
         visible={recompenseHaccp !== null && validationHaccp === null}
         grade={recompenseHaccp?.grade ?? scoreHaccp.grade}
         pointsGagnes={recompenseHaccp?.pointsGagnes ?? 0}
-        onContinue={() => setRecompenseHaccp(null)}
+        onClose={() => setRecompenseHaccp(null)}
       />
     </>
   );

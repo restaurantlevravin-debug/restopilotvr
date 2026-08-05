@@ -1,6 +1,7 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useHaccp } from "@/context/HaccpContext";
+import { obtenirIllustrationGrade } from "@/components/HaccpRewardModal";
 
 export default function PerformanceHaccp() {
   const { scoreHaccp } = useHaccp();
@@ -17,6 +18,7 @@ export default function PerformanceHaccp() {
 
       <View style={styles.levelCard}>
         <Text style={styles.levelTitle}>🏆 Niveau HACCP</Text>
+        <Image source={obtenirIllustrationGrade(scoreHaccp.grade)} style={styles.gradeImage} resizeMode="contain" />
         <Text style={styles.grade}>{scoreHaccp.grade}</Text>
         <Text style={styles.progress}>Progression : {prochainGrade}</Text>
       </View>
@@ -59,6 +61,7 @@ const styles = StyleSheet.create({
   levelCard: { backgroundColor: "#081A24", borderColor: "#B08D57", borderRadius: 15, borderWidth: 1, marginBottom: 18, padding: 18 },
   levelTitle: { color: "#D4AF37", fontSize: 19, fontWeight: "bold" },
   grade: { color: "#FFFFFF", fontSize: 24, fontWeight: "bold", marginTop: 8 },
+  gradeImage: { alignSelf: "center", height: 180, marginVertical: 8, width: 180 },
   progress: { color: "#C9DDE0", lineHeight: 20, marginTop: 8 },
   statsCard: { flexDirection: "row", backgroundColor: "#FFFFFF", borderRadius: 15, paddingVertical: 18, marginBottom: 18 },
   stat: { flex: 1, alignItems: "center", paddingHorizontal: 6 },
