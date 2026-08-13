@@ -104,7 +104,14 @@ export default function HistoriqueHaccp() {
               <Text style={styles.line}>Action réalisée : {action.action}</Text>
               <Text style={styles.line}>Responsable : {action.responsable}</Text>
               <Text style={styles.line}>Date : {action.date}</Text>
+              {action.commentaire ? <Text style={styles.line}>Commentaire : {action.commentaire}</Text> : null}
               <Text style={styles.line}>Résolution : {action.resolution || "En attente"}</Text>
+              {action.photoPreuve ? (
+                <View style={styles.photoBlock}>
+                  <Text style={styles.photoLabel}>📷 Preuve d'anomalie</Text>
+                  <Image source={{ uri: action.photoPreuve }} style={styles.thumbnail} accessibilityLabel={`Preuve d'anomalie du ${action.date}`} />
+                </View>
+              ) : null}
             </View>
           ))
         )}

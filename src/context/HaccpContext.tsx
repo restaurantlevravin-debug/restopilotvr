@@ -24,6 +24,9 @@ export type ReleveTemperature = {
   responsable:string;
   conforme:boolean;
   photo?:string;
+  commentaireAnomalie?:string;
+  actionCorrective?:string;
+  anomalieTraitee?:boolean;
   heurePrevue?:string;
   dansCreneau?:boolean;
 };
@@ -47,6 +50,8 @@ export type ActionCorrective = {
   responsable:string;
   date:string;
   resolution:string;
+  commentaire?:string;
+  photoPreuve?:string;
 };
 
 export type ReglagesNotifications = {
@@ -222,7 +227,7 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
   async function ajouterReleve(releve:Omit<ReleveTemperature,"id">){
 
     const points = calculerPointsReleve(releve);
-    const progression = calculerProgressionHaccp(donnees.scoreHaccp, releve.conforme, Boolean(releve.photo), points);
+    const progression = calculerProgressionHaccp(donnees.scoreHaccp, releve.conforme, !releve.conforme && Boolean(releve.photo), points);
 
     await sauvegarder({
       ...donnees,
@@ -378,13 +383,14 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
 }
 
 export function calculerPointsReleve(
-  releve:Pick<ReleveTemperature,"conforme" | "photo" | "dansCreneau">
+  releve:Pick<ReleveTemperature,"conforme" | "photo" | "anomalieTraitee">
 ){
   const pointsReleve = 5;
-  const pointsConformite = releve.dansCreneau && releve.conforme ? 2 : 0;
-  const pointsPreuve = releve.dansCreneau && releve.photo ? 3 : 0;
+  const pointsConformite = releve.conforme ? 2 : 0;
+  const pointsAnomalie = !releve.conforme && releve.anomalieTraitee ? 5 : 0;
+  const pointsPreuve = !releve.conforme && releve.photo ? 3 : 0;
 
-  return pointsReleve + pointsConformite + pointsPreuve;
+  return pointsReleve + pointsConformite + pointsAnomalie + pointsPreuve;
 }
 
 function determinerGrade({

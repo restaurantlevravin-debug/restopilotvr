@@ -1,7 +1,7 @@
-import { Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import { Platform } from "react-native";
 
 import type { ActionCorrective, ReleveTemperature, ScoreHaccp, TraceabiliteProduit } from "@/context/HaccpContext";
 
@@ -135,14 +135,13 @@ export async function exporterTracabilitePdf(
   traces: TraceabiliteProduit[],
   options: OptionsExportHaccp = {}
 ) {
-  const fiches = await Promise.all(traces.map(async (trace) => {
-    const image = await imageBase64(trace.photo);
+  const fiches = traces.map((trace) => {
     return `<div class="record"><h3>${echapperHtml(trace.produit)}</h3><table><tbody>
       <tr><th>Fournisseur</th><td>${echapperHtml(trace.fournisseur)}</td><th>Date réception</th><td>${echapperHtml(trace.dateReception)}</td></tr>
       <tr><th>DLC</th><td>${echapperHtml(trace.dlc)}</td><th>Température réception</th><td>${echapperHtml(trace.temperatureReception)}</td></tr>
       <tr><th>Lot</th><td>${echapperHtml(trace.lot)}</td><th>Commentaire</th><td>${echapperHtml(trace.commentaire)}</td></tr>
-    </tbody></table>${photoHtml(image, "Photo étiquette")}</div>`;
-  }));
+    </tbody></table></div>`;
+  });
   const contenu = `<h2>Registre de traçabilité produits</h2>${fiches.length ? fiches.join("") : "<p>Aucune réception enregistrée.</p>"}`;
   await genererEtPartagerPdf("Registre de traçabilité produits", contenu, options);
 }
@@ -151,8 +150,11 @@ export async function exporterActionsCorrectivesPdf(
   actions: ActionCorrective[],
   options: OptionsExportHaccp = {}
 ) {
-  const lignes = actions.length ? actions.map((action) => `<tr><td>${echapperHtml(action.date)}</td><td>${echapperHtml(action.probleme)}</td><td>${echapperHtml(action.action)}</td><td>${echapperHtml(action.responsable)}</td><td>${echapperHtml(action.resolution)}</td></tr>`).join("") : `<tr><td colspan="5">Aucune action corrective enregistrée.</td></tr>`;
-  const contenu = `<h2>Actions correctives</h2><table><thead><tr><th>Date</th><th>Problème constaté</th><th>Action réalisée</th><th>Responsable</th><th>Résolution</th></tr></thead><tbody>${lignes}</tbody></table>`;
+  const fiches = await Promise.all(actions.map(async (action) => `<div class="record"><h3>${echapperHtml(action.date)} - ${echapperHtml(action.probleme)}</h3><table><tbody>
+    <tr><th>Action réalisée</th><td>${echapperHtml(action.action)}</td></tr><tr><th>Responsable</th><td>${echapperHtml(action.responsable)}</td></tr>
+    <tr><th>Commentaire</th><td>${echapperHtml(action.commentaire)}</td></tr><tr><th>Résolution</th><td>${echapperHtml(action.resolution)}</td></tr>
+  </tbody></table>${photoHtml(await imageBase64(action.photoPreuve), "Photo de preuve d'anomalie")}</div>`));
+  const contenu = `<h2>Actions correctives et anomalies</h2>${fiches.length ? fiches.join("") : "<p>Aucune action corrective enregistrée.</p>"}`;
   await genererEtPartagerPdf("Registre des actions correctives", contenu, options);
 }
 
@@ -160,11 +162,11 @@ export async function exporterDossierHaccpCompletPdf(donnees: DonneesExportHaccp
   const nombreConformes = donnees.scoreHaccp.nombreConformes;
   const taux = donnees.scoreHaccp.nombreReleves ? Math.round((nombreConformes / donnees.scoreHaccp.nombreReleves) * 100) : 0;
   const temperatureLignes = donnees.releves.map((releve) => `<tr><td>${echapperHtml(releve.date)}</td><td>${echapperHtml(releve.heure)}</td><td>${echapperHtml(releve.periode)}</td><td>${echapperHtml(releve.temperature)}</td><td>${echapperHtml(releve.responsable)}</td><td class="${releve.conforme ? "ok" : "ko"}">${releve.conforme ? "Conforme" : "Non conforme"}</td></tr>`).join("") || `<tr><td colspan="6">Aucun relevé enregistré.</td></tr>`;
-  const traceFiches = await Promise.all(donnees.traces.map(async (trace) => `<div class="record"><h3>${echapperHtml(trace.produit)}</h3><p><strong>Fournisseur :</strong> ${echapperHtml(trace.fournisseur)}<br /><strong>Réception :</strong> ${echapperHtml(trace.dateReception)} · <strong>DLC :</strong> ${echapperHtml(trace.dlc)}<br /><strong>Température :</strong> ${echapperHtml(trace.temperatureReception)} · <strong>Lot :</strong> ${echapperHtml(trace.lot)}<br /><strong>Commentaire :</strong> ${echapperHtml(trace.commentaire)}</p>${photoHtml(await imageBase64(trace.photo), "Photo étiquette")}</div>`));
-  const actionLignes = donnees.actions.map((action) => `<tr><td>${echapperHtml(action.date)}</td><td>${echapperHtml(action.probleme)}</td><td>${echapperHtml(action.action)}</td><td>${echapperHtml(action.responsable)}</td><td>${echapperHtml(action.resolution)}</td></tr>`).join("") || `<tr><td colspan="5">Aucune action corrective enregistrée.</td></tr>`;
+  const traceFiches = donnees.traces.map((trace) => `<div class="record"><h3>${echapperHtml(trace.produit)}</h3><p><strong>Fournisseur :</strong> ${echapperHtml(trace.fournisseur)}<br /><strong>Réception :</strong> ${echapperHtml(trace.dateReception)} · <strong>DLC :</strong> ${echapperHtml(trace.dlc)}<br /><strong>Température :</strong> ${echapperHtml(trace.temperatureReception)} · <strong>Lot :</strong> ${echapperHtml(trace.lot)}<br /><strong>Commentaire :</strong> ${echapperHtml(trace.commentaire)}</p></div>`);
+  const actionFiches = await Promise.all(donnees.actions.map(async (action) => `<div class="record"><h3>${echapperHtml(action.date)} - ${echapperHtml(action.probleme)}</h3><p><strong>Action :</strong> ${echapperHtml(action.action)}<br /><strong>Responsable :</strong> ${echapperHtml(action.responsable)}<br /><strong>Commentaire :</strong> ${echapperHtml(action.commentaire)}<br /><strong>Résolution :</strong> ${echapperHtml(action.resolution)}</p>${photoHtml(await imageBase64(action.photoPreuve), "Photo de preuve d'anomalie")}</div>`));
   const contenu = `<h2>1 - Relevés températures</h2><table><thead><tr><th>Date</th><th>Heure</th><th>Période</th><th>Température</th><th>Responsable</th><th>Conformité</th></tr></thead><tbody>${temperatureLignes}</tbody></table>
     <h2>2 - Traçabilité produits</h2>${traceFiches.join("") || "<p>Aucune réception enregistrée.</p>"}
-    <h2>3 - Actions correctives</h2><table><thead><tr><th>Date</th><th>Problème</th><th>Action</th><th>Responsable</th><th>Résolution</th></tr></thead><tbody>${actionLignes}</tbody></table>
+    <h2>3 - Actions correctives et anomalies</h2>${actionFiches.join("") || "<p>Aucune action corrective enregistrée.</p>"}
     <h2>4 - Score qualité HACCP</h2><div class="summary"><strong>Score total :</strong> ${donnees.scoreHaccp.totalPoints} points<br /><strong>Relevés :</strong> ${donnees.scoreHaccp.nombreReleves}<br /><strong>Preuves photos :</strong> ${donnees.scoreHaccp.nombrePhotos}</div>
     <h2>5 - Statistiques conformité</h2><div class="summary"><strong>Relevés conformes :</strong> ${nombreConformes}<br /><strong>Relevés non conformes :</strong> ${donnees.scoreHaccp.nombreReleves - nombreConformes}<br /><strong>Taux de conformité :</strong> ${taux}%</div>`;
   await genererEtPartagerPdf("Dossier HACCP complet", contenu, options);

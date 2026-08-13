@@ -65,6 +65,8 @@ export default function Haccp() {
   const [responsableReleve, setResponsableReleve] = useState("");
   const [conforme, setConforme] = useState(true);
   const [photoPreuveReleve, setPhotoPreuveReleve] = useState("");
+  const [commentaireAnomalie, setCommentaireAnomalie] = useState("");
+  const [actionAnomalie, setActionAnomalie] = useState("");
 
   const [produit, setProduit] = useState("");
   const [fournisseur, setFournisseur] = useState("");
@@ -93,12 +95,21 @@ export default function Haccp() {
       return;
     }
 
+    if (!conforme && (!photoPreuveReleve || !commentaireAnomalie.trim() || !actionAnomalie.trim())) {
+      Alert.alert(
+        "Procédure anomalie incomplète",
+        "Pour une température non conforme, ajoutez une photo, un commentaire et une action corrective."
+      );
+      return;
+    }
+
     const maintenant = new Date();
     const dateReelle = maintenant.toLocaleDateString("fr-FR");
     const heureReelle = maintenant.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
     const statutCreneau = obtenirStatutCreneau(periode, maintenant);
-    const pointsValidation = calculerPointsReleve({ conforme, photo: photoPreuveReleve || undefined, ...statutCreneau });
-    const progression = calculerProgressionHaccp(scoreHaccp, conforme, Boolean(photoPreuveReleve), pointsValidation);
+    const anomalieTraitee = !conforme && Boolean(photoPreuveReleve && commentaireAnomalie.trim() && actionAnomalie.trim());
+    const pointsValidation = calculerPointsReleve({ conforme, photo: photoPreuveReleve || undefined, anomalieTraitee });
+    const progression = calculerProgressionHaccp(scoreHaccp, conforme, !conforme && Boolean(photoPreuveReleve), pointsValidation);
 
     await ajouterReleve({
       periode,
@@ -107,9 +118,24 @@ export default function Haccp() {
       temperature,
       responsable: responsableReleve,
       conforme,
-      photo: photoPreuveReleve || undefined,
+      photo: !conforme ? photoPreuveReleve : undefined,
+      commentaireAnomalie: !conforme ? commentaireAnomalie.trim() : undefined,
+      actionCorrective: !conforme ? actionAnomalie.trim() : undefined,
+      anomalieTraitee,
       ...statutCreneau,
     });
+
+    if (!conforme) {
+      await ajouterAction({
+        probleme: `Température non conforme : ${temperature} (${periode}).`,
+        action: actionAnomalie.trim(),
+        responsable: responsableReleve,
+        date: dateReelle,
+        resolution: "Action corrective enregistrée",
+        commentaire: commentaireAnomalie.trim(),
+        photoPreuve: photoPreuveReleve,
+      });
+    }
 
     setValidationHaccp({
       temperature,
@@ -129,16 +155,11 @@ export default function Haccp() {
       });
     }
 
-    if (!conforme) {
-      setProbleme(`Température non conforme : ${temperature} (${periode}).`);
-      setResponsableAction(responsableReleve);
-      setDateAction(dateReelle);
-      setAfficherAction(true);
-    }
-
     setTemperature("");
     setResponsableReleve("");
     setPhotoPreuveReleve("");
+    setCommentaireAnomalie("");
+    setActionAnomalie("");
     setAfficherReleve(false);
   }
 
@@ -285,10 +306,18 @@ export default function Haccp() {
             <Pressable style={[styles.conformityButton, conforme ? styles.conforme : styles.nonConforme]} onPress={() => setConforme(!conforme)}>
               <Text style={styles.buttonText}>{conforme ? "✅ Conforme" : "❌ Non conforme"}</Text>
             </Pressable>
-            <Pressable style={styles.secondaryButton} onPress={prendrePhotoPreuveReleve}>
-              <Text style={styles.buttonText}>📷 Ajouter une preuve photo</Text>
-            </Pressable>
-            {photoPreuveReleve !== "" && <Text style={styles.photoStatus}>✅ Preuve photo ajoutée (+3 points)</Text>}
+            {!conforme && (
+              <View style={styles.anomalyForm}>
+                <Text style={styles.anomalyTitle}>⚠️ Température non conforme</Text>
+                <Text style={styles.scheduleInfo}>Photo, commentaire et action corrective obligatoires.</Text>
+                <Pressable style={styles.anomalyButton} onPress={prendrePhotoPreuveReleve}>
+                  <Text style={styles.buttonText}>📷 Photographier la preuve</Text>
+                </Pressable>
+                {photoPreuveReleve !== "" && <Text style={styles.photoStatus}>✅ Photo de preuve ajoutée (+3 points)</Text>}
+                <TextInput style={styles.input} value={commentaireAnomalie} onChangeText={setCommentaireAnomalie} placeholder="Commentaire sur l'anomalie" multiline />
+                <TextInput style={styles.input} value={actionAnomalie} onChangeText={setActionAnomalie} placeholder="Action corrective réalisée" multiline />
+              </View>
+            )}
             <Pressable style={styles.primaryButton} onPress={enregistrerReleve}>
               <Text style={styles.buttonText}>💾 Enregistrer le relevé</Text>
             </Pressable>
@@ -397,4 +426,7 @@ const styles = StyleSheet.create({
   nonConforme: { backgroundColor: "#B08D57" },
   photoStatus: { color: "#00695C", fontWeight: "bold", marginBottom: 12 },
   scheduleInfo: { color: "#555555", marginBottom: 12, lineHeight: 20 },
+  anomalyForm: { backgroundColor: "#FFF2EE", borderColor: "#B3261E", borderRadius: 10, borderWidth: 1, marginBottom: 12, padding: 12 },
+  anomalyTitle: { color: "#B3261E", fontSize: 17, fontWeight: "bold", marginBottom: 8 },
+  anomalyButton: { backgroundColor: "#B3261E", borderRadius: 10, marginBottom: 12, padding: 14 },
 });
