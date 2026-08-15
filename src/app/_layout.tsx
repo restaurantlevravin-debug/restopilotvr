@@ -9,6 +9,7 @@ import { useColorScheme } from "react-native";
 import { PersonnelProvider } from "@/context/PersonnelContext";
 import { EntrepriseProvider } from "@/context/EntrepriseContext";
 import { UserProvider } from "@/context/UserContext";
+import { ValidationProvider } from "@/context/ValidationContext";
 import { HaccpProvider } from "@/context/HaccpContext";
 
 
@@ -25,7 +26,9 @@ export default function RootLayout() {
 
         <UserProvider>
 
-          <HaccpProvider>
+          <ValidationProvider>
+
+            <HaccpProvider>
 
             <ThemeProvider
               value={
@@ -43,7 +46,9 @@ export default function RootLayout() {
 
             </ThemeProvider>
 
-          </HaccpProvider>
+            </HaccpProvider>
+
+          </ValidationProvider>
 
         </UserProvider>
 

@@ -1,81 +1,34 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useState } from "react";
 
+import {
+  AUCUNE_PERMISSION,
+  hasPermission,
+  PERMISSIONS_PAR_ROLE,
+} from "@/constants/permissions";
+import { obtenirCleStockageUtilisateurs } from "@/constants/storage";
 import { useEntreprise } from "@/context/EntrepriseContext";
 import type {
   Permission,
   PermissionsUtilisateur,
-  RoleUtilisateur,
-  Utilisateur,
+  Utilisateur
 } from "@/types/entreprise";
 
 export type {
   Permission,
   PermissionsUtilisateur,
   RoleUtilisateur,
-  Utilisateur,
+  Utilisateur
 } from "@/types/entreprise";
 
-export const PERMISSIONS_PAR_ROLE: Record<
-  RoleUtilisateur,
-  Readonly<PermissionsUtilisateur>
-> = {
-  GERANT: {
-    administrationEntreprise: true,
-    gestionUtilisateurs: true,
-    configurationHaccp: true,
-    gestionPlanning: true,
-    validationJournee: true,
-  },
-  CHEF_CUISINE: {
-    administrationEntreprise: false,
-    gestionUtilisateurs: false,
-    configurationHaccp: true,
-    gestionPlanning: true,
-    validationJournee: true,
-  },
-  MAITRE_HOTEL: {
-    administrationEntreprise: false,
-    gestionUtilisateurs: false,
-    configurationHaccp: false,
-    gestionPlanning: true,
-    validationJournee: true,
-  },
-  SALARIE: {
-    administrationEntreprise: false,
-    gestionUtilisateurs: false,
-    configurationHaccp: false,
-    gestionPlanning: false,
-    validationJournee: false,
-  },
-};
+export { hasPermission, PERMISSIONS_PAR_ROLE } from "@/constants/permissions";
 
-const AUCUNE_PERMISSION: Readonly<PermissionsUtilisateur> = {
-  administrationEntreprise: false,
-  gestionUtilisateurs: false,
-  configurationHaccp: false,
-  gestionPlanning: false,
-  validationJournee: false,
-};
-
-const STOCKAGE_USERS_PREFIX = "RESTOPILOT_USERS_";
-
-function obtenirCleStockageUtilisateurs(entrepriseId: string): string {
-  return `${STOCKAGE_USERS_PREFIX}${entrepriseId}`;
-}
-
-export function hasPermission(
-  utilisateur: Utilisateur | null | undefined,
-  permission: Permission
-): boolean {
-  return utilisateur
-    ? PERMISSIONS_PAR_ROLE[utilisateur.role][permission]
-    : false;
-}
-
-type NouvelUtilisateur = Omit<Utilisateur, "id" | "entrepriseId">;
+type NouvelUtilisateur = Omit<
+  Utilisateur,
+  "id" | "entrepriseId" | "pin" | "pinValidation"
+>;
 type ModificationUtilisateur = Partial<
-  Omit<Utilisateur, "id" | "entrepriseId">
+  Omit<Utilisateur, "id" | "entrepriseId" | "pin" | "pinValidation">
 >;
 
 type UserContextType = {
@@ -88,6 +41,10 @@ type UserContextType = {
   ) => Promise<void>;
   supprimerUtilisateur: (id: string) => Promise<void>;
   changerUtilisateurActif: (id: string) => Promise<void>;
+  modifierPinValidationUtilisateur: (
+    utilisateurId: string,
+    pinValidation: string
+  ) => Promise<boolean>;
   obtenirPermissionsUtilisateur: (
     utilisateur?: Utilisateur | null
   ) => PermissionsUtilisateur;
@@ -221,7 +178,41 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }
 
   function verifierPin(pin: string): boolean {
-    return Boolean(utilisateurActif?.pin && utilisateurActif.pin === pin);
+    const pinUtilisateur = utilisateurActif?.pinValidation ?? utilisateurActif?.pin;
+    return Boolean(pinUtilisateur && pinUtilisateur === pin);
+  }
+
+  async function modifierPinValidationUtilisateur(
+    utilisateurId: string,
+    pinValidation: string
+  ): Promise<boolean> {
+    if (
+      !entrepriseActive
+      || !hasPermission(utilisateurActif, "administrationEntreprise")
+      || !pinValidation.trim()
+    ) {
+      return false;
+    }
+
+    const utilisateurExiste = utilisateurs.some(
+      (utilisateur) =>
+        utilisateur.id === utilisateurId
+        && utilisateur.entrepriseId === entrepriseActive.id
+    );
+
+    if (!utilisateurExiste) {
+      return false;
+    }
+
+    await sauvegarder(
+      utilisateurs.map((utilisateur) =>
+        utilisateur.id === utilisateurId
+          ? { ...utilisateur, pinValidation: pinValidation.trim() }
+          : utilisateur
+      )
+    );
+
+    return true;
   }
 
   return (
@@ -233,6 +224,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         modifierUtilisateur,
         supprimerUtilisateur,
         changerUtilisateurActif,
+        modifierPinValidationUtilisateur,
         obtenirPermissionsUtilisateur,
         verifierPermission,
         verifierPin,

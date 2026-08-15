@@ -16,6 +16,7 @@ import { router } from "expo-router";
 
 import { useHaccp, PointControleTemperature } from "@/context/HaccpContext";
 import { useEntreprise } from "@/context/EntrepriseContext";
+import { useUser } from "@/context/UserContext";
 
 type ControlePoint = {
   point: PointControleTemperature;
@@ -24,7 +25,6 @@ type ControlePoint = {
   motif: string;
   actionCorrective: string;
   photo: string;
-  responsable: string;
   complete: boolean;
 };
 
@@ -33,6 +33,7 @@ export default function ControleduJourScreen() {
 
   const { pointsControle, ajouterReleve } = useHaccp();
   const { entrepriseActive } = useEntreprise();
+  const { utilisateurActif } = useUser();
 
   const pointsActifs = pointsControle.filter((p) => p.actif);
 
@@ -44,7 +45,6 @@ export default function ControleduJourScreen() {
       motif: "",
       actionCorrective: "",
       photo: "",
-      responsable: "",
       complete: false,
     }))
   );
@@ -151,20 +151,6 @@ export default function ControleduJourScreen() {
   }
 
 
-  function handleResponsableChange(value: string) {
-
-    setControles([
-      ...controles.slice(0, currentIndex),
-      {
-        ...currentControle,
-        responsable: value,
-      },
-      ...controles.slice(currentIndex + 1),
-    ]);
-
-  }
-
-
   function validerControle() {
 
     if (!currentControle.temperature.trim()) {
@@ -172,8 +158,8 @@ export default function ControleduJourScreen() {
       return;
     }
 
-    if (!currentControle.responsable.trim()) {
-      Alert.alert("Champ manquant", "Indiquez le responsable.");
+    if (!utilisateurActif) {
+      Alert.alert("Identification requise", "Sélectionnez un profil utilisateur.");
       return;
     }
 
@@ -207,6 +193,11 @@ export default function ControleduJourScreen() {
 
     try {
 
+      if (!utilisateurActif) {
+        Alert.alert("Identification requise", "Sélectionnez un profil utilisateur.");
+        return;
+      }
+
       for (const controle of controles) {
 
         if (!controle.complete) continue;
@@ -224,7 +215,7 @@ export default function ControleduJourScreen() {
           date: dateReelle,
           heure: heureReelle,
           temperature: controle.temperature,
-          responsable: controle.responsable,
+          responsable: utilisateurActif.nom,
           conforme: controle.conforme ?? false,
           photo: !controle.conforme ? controle.photo : undefined,
           commentaireAnomalie: !controle.conforme ? controle.motif : undefined,
@@ -376,7 +367,6 @@ export default function ControleduJourScreen() {
                   motif: "",
                   actionCorrective: "",
                   photo: "",
-                  responsable: "",
                   complete: false,
                 }))
               );
@@ -501,20 +491,15 @@ export default function ControleduJourScreen() {
             </View>
           )}
 
-          <Text style={styles.formLabel}>Responsable du contrôle *</Text>
-          <TextInput
-            style={styles.input}
-            value={currentControle.responsable}
-            onChangeText={handleResponsableChange}
-            placeholder="Nom du responsable"
-            placeholderTextColor="#999"
-          />
+          <Text style={styles.formLabel}>
+            Effectué par : {utilisateurActif?.nom ?? "Profil non sélectionné"}
+          </Text>
 
           <Pressable
             style={[
               styles.primaryButton,
               (!currentControle.temperature ||
-                !currentControle.responsable ||
+                !utilisateurActif ||
                 (!currentControle.conforme &&
                   (!currentControle.motif ||
                     !currentControle.actionCorrective ||
@@ -524,7 +509,7 @@ export default function ControleduJourScreen() {
             onPress={validerControle}
             disabled={
               !currentControle.temperature ||
-              !currentControle.responsable ||
+              !utilisateurActif ||
               (!currentControle.conforme &&
                 (!currentControle.motif ||
                   !currentControle.actionCorrective ||

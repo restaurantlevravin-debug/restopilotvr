@@ -9,6 +9,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { useEntreprise } from "@/context/EntrepriseContext";
 import { useUser } from "@/context/UserContext";
+import { useValidation } from "@/context/ValidationContext";
+import type {
+  IdentiteValidation,
+  ValidationAction,
+} from "@/types/validation";
 
 
 export type UtilisateurTrace = {
@@ -43,6 +48,7 @@ export type ReleveTemperature = {
   validePar?:UtilisateurTrace;
   signePar?:UtilisateurTrace;
   dateValidation?:string;
+  validation?:ValidationAction;
   dateSignature?:string;
 };
 
@@ -57,6 +63,8 @@ export type TraceabiliteProduit = {
   commentaire:string;
   photo:string;
   effectuePar?:UtilisateurTrace;
+  validePar?:UtilisateurTrace;
+  validation?:ValidationAction;
 };
 
 export type ActionCorrective = {
@@ -124,7 +132,8 @@ type HaccpContextType = DonneesHaccp & {
   ajouterPointControle:(point:Omit<PointControleTemperature,"id">) => Promise<void>;
   modifierPointControle:(id:string, point:Omit<PointControleTemperature,"id">) => Promise<void>;
   supprimerPointControle:(id:string) => Promise<void>;
-  validerReleve:(id:number) => Promise<boolean>;
+  validerReleve:(id:number, identite?:IdentiteValidation) => Promise<boolean>;
+  validerActionCorrective:(id:number, identite?:IdentiteValidation) => Promise<boolean>;
   signerRapportHaccp:() => Promise<boolean>;
   configurerNotifications:(reglages:Pick<ReglagesNotifications,"active" | "matinHeure" | "soirHeure">) => Promise<boolean>;
   obtenirMesControles:() => PointControleTemperature[];
@@ -202,6 +211,7 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
 
   const { entrepriseActive } = useEntreprise();
   const { utilisateurActif, verifierPermission } = useUser();
+  const { validerAction } = useValidation();
 
   function creerTraceUtilisateur() {
     if (!utilisateurActif) {
@@ -372,8 +382,24 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
   }
 
 
-  async function validerReleve(id:number){
-    if (!verifierPermission("validationJournee") || !utilisateurActif) {
+  async function validerReleve(id:number, identite?:IdentiteValidation){
+    const identification = identite ?? (
+      utilisateurActif
+        ? { methodeValidation:"CLIC", utilisateurId:utilisateurActif.id } as const
+        : undefined
+    );
+
+    if (!identification) {
+      return false;
+    }
+
+    const validation = await validerAction({
+      actionType:"HACCP_RELEVE_TEMPERATURE",
+      actionId:id.toString(),
+      ...identification,
+    });
+
+    if (!validation) {
       return false;
     }
 
@@ -385,18 +411,67 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
       return {
         ...releve,
         validePar: {
-          id: utilisateurActif.id,
-          nom: utilisateurActif.nom,
-          role: utilisateurActif.role,
-          date: new Date().toLocaleDateString("fr-FR"),
+          id: validation.valideParUtilisateurId,
+          nom: validation.valideParNom,
+          role: validation.valideParRole,
+          date: validation.dateValidation,
         },
-        dateValidation: new Date().toLocaleDateString("fr-FR"),
+        dateValidation: validation.dateValidation,
+        validation,
       };
     });
 
     await sauvegarder({
       ...donnees,
       releves: relevésMisAJour,
+    });
+
+    return true;
+  }
+
+
+  async function validerActionCorrective(
+    id:number,
+    identite?:IdentiteValidation
+  ){
+    const identification = identite ?? (
+      utilisateurActif
+        ? { methodeValidation:"CLIC", utilisateurId:utilisateurActif.id } as const
+        : undefined
+    );
+
+    if (!identification) {
+      return false;
+    }
+
+    const validation = await validerAction({
+      actionType:"HACCP_ACTION_CORRECTIVE",
+      actionId:id.toString(),
+      ...identification,
+    });
+
+    if (!validation) {
+      return false;
+    }
+
+    const actionsMisesAJour = donnees.actions.map((action) =>
+      action.id === id
+        ? {
+            ...action,
+            validePar: {
+              id:validation.valideParUtilisateurId,
+              nom:validation.valideParNom,
+              role:validation.valideParRole,
+              date:validation.dateValidation,
+            },
+            validation,
+          }
+        : action
+    );
+
+    await sauvegarder({
+      ...donnees,
+      actions:actionsMisesAJour,
     });
 
     return true;
@@ -589,6 +664,7 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
         modifierPointControle,
         supprimerPointControle,
         validerReleve,
+        validerActionCorrective,
         signerRapportHaccp,
         configurerNotifications,
         obtenirMesControles,

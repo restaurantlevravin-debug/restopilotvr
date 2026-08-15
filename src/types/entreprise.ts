@@ -9,15 +9,44 @@ export type Permission =
   | "gestionUtilisateurs"
   | "configurationHaccp"
   | "gestionPlanning"
+  | "gestionPointage"
+  | "validationAction"
   | "validationJournee";
 
 export type PermissionsUtilisateur = Record<Permission, boolean>;
+
+export type ServiceOuverture = {
+  heureDebut: string;
+  heureFin: string;
+};
+
+export type JourOuverture = {
+  jour: string;
+  ouvert: boolean;
+  services: ServiceOuverture[];
+};
+
+export type TypeExceptionExploitation =
+  | "HORAIRES_EXCEPTIONNELS"
+  | "FERMETURE_EXCEPTIONNELLE"
+  | "JOUR_FERIE";
+
+export type ExceptionExploitation = {
+  date: string;
+  type: TypeExceptionExploitation;
+  ouvert: boolean;
+  services: ServiceOuverture[];
+  motif?: string;
+};
 
 export type Entreprise = {
   id: string;
   nom: string;
   adresse?: string;
   actif: boolean;
+  joursOuverture: JourOuverture[];
+  exceptionsExploitation: ExceptionExploitation[];
+  animationEquipeActive: boolean;
 };
 
 export type Utilisateur = {
@@ -26,6 +55,9 @@ export type Utilisateur = {
   nom: string;
   email: string;
   role: RoleUtilisateur;
+  poste?: string;
   actif: boolean;
+  pinValidation?: string;
+  /** @deprecated Utiliser pinValidation pour les nouvelles validations. */
   pin?: string;
 };

@@ -22,6 +22,7 @@ import {
 import { HaccpValidationModal } from "@/components/HaccpValidationModal";
 import { HaccpRewardModal } from "@/components/HaccpRewardModal";
 import type { GradeHaccp } from "@/context/HaccpContext";
+import { useUser } from "@/context/UserContext";
 
 type ValidationHaccp = {
   temperature: string;
@@ -54,6 +55,7 @@ export default function Haccp() {
     ajouterAction,
     configurerNotifications,
   } = useHaccp();
+  const { utilisateurActif } = useUser();
 
   const [afficherReleve, setAfficherReleve] = useState(false);
   const [afficherTrace, setAfficherTrace] = useState(false);
@@ -65,7 +67,6 @@ export default function Haccp() {
   const [afficherSelecteurPoint, setAfficherSelecteurPoint] = useState(false);
   const [periode, setPeriode] = useState<"matin" | "soir">("matin");
   const [temperature, setTemperature] = useState("");
-  const [responsableReleve, setResponsableReleve] = useState("");
   const [conforme, setConforme] = useState(true);
   const [photoPreuveReleve, setPhotoPreuveReleve] = useState("");
   const [commentaireAnomalie, setCommentaireAnomalie] = useState("");
@@ -82,7 +83,6 @@ export default function Haccp() {
 
   const [probleme, setProbleme] = useState("");
   const [action, setAction] = useState("");
-  const [responsableAction, setResponsableAction] = useState("");
   const [dateAction, setDateAction] = useState(valeurInitialeDate());
   const [resolution, setResolution] = useState("");
 
@@ -98,8 +98,8 @@ export default function Haccp() {
       return;
     }
 
-    if (!temperature.trim() || !responsableReleve.trim()) {
-      Alert.alert("Champs manquants", "Indiquez la température et le responsable.");
+    if (!temperature.trim() || !utilisateurActif) {
+      Alert.alert("Identification requise", "Sélectionnez un profil utilisateur.");
       return;
     }
 
@@ -143,7 +143,7 @@ export default function Haccp() {
       date: dateReelle,
       heure: heureReelle,
       temperature,
-      responsable: responsableReleve,
+      responsable: utilisateurActif.nom,
       conforme: conformeCalcule,
       photo: !conformeCalcule ? photoPreuveReleve : undefined,
       commentaireAnomalie: !conformeCalcule ? commentaireAnomalie.trim() : undefined,
@@ -156,7 +156,7 @@ export default function Haccp() {
       await ajouterAction({
         probleme: `Température non conforme sur ${pointControle?.nom ?? "équipement"} : ${temperature}°C (plage: ${pointControle?.temperatureMin ?? "-"}°C à ${pointControle?.temperatureMax ?? "-"}°C).`,
         action: actionAnomalie.trim(),
-        responsable: responsableReleve,
+        responsable: utilisateurActif.nom,
         date: dateReelle,
         resolution: "Action corrective enregistrée",
         commentaire: commentaireAnomalie.trim(),
@@ -168,7 +168,7 @@ export default function Haccp() {
       temperature,
       date: dateReelle,
       heure: heureReelle,
-      responsable: responsableReleve,
+      responsable: utilisateurActif.nom,
       conforme: conformeCalcule,
       points: pointsValidation,
       photoUri: photoPreuveReleve || undefined,
@@ -183,7 +183,6 @@ export default function Haccp() {
     }
 
     setTemperature("");
-    setResponsableReleve("");
     setPhotoPreuveReleve("");
     setCommentaireAnomalie("");
     setActionAnomalie("");
@@ -255,22 +254,21 @@ export default function Haccp() {
   }
 
   async function enregistrerAction() {
-    if (!probleme.trim() || !action.trim() || !responsableAction.trim()) {
-      Alert.alert("Champs manquants", "Indiquez le problème, l'action et le responsable.");
+    if (!probleme.trim() || !action.trim() || !utilisateurActif) {
+      Alert.alert("Identification requise", "Sélectionnez un profil utilisateur.");
       return;
     }
 
     await ajouterAction({
       probleme,
       action,
-      responsable: responsableAction,
+      responsable: utilisateurActif.nom,
       date: dateAction,
       resolution,
     });
 
     setProbleme("");
     setAction("");
-    setResponsableAction("");
     setResolution("");
     setAfficherAction(false);
   }
@@ -401,7 +399,7 @@ export default function Haccp() {
             </View>
             <Text style={styles.scheduleInfo}>Horaire prévu : {periode === "matin" ? HORAIRE_RELEVE_MATIN : HORAIRE_RELEVE_SOIR}. L'heure réelle est enregistrée automatiquement.</Text>
             <TextInput style={styles.input} value={temperature} onChangeText={setTemperature} placeholder="Température relevée (ex. 3)" />
-            <TextInput style={styles.input} value={responsableReleve} onChangeText={setResponsableReleve} placeholder="Responsable" />
+            <Text style={styles.scheduleInfo}>Effectué par : {utilisateurActif?.nom ?? "Profil non sélectionné"}</Text>
             <Pressable style={[styles.conformityButton, conforme ? styles.conforme : styles.nonConforme]} onPress={() => {}}>
               <Text style={styles.buttonText}>{conforme ? "✅ Conforme" : "❌ Non conforme (automatique)"}</Text>
             </Pressable>
@@ -484,7 +482,7 @@ export default function Haccp() {
           <View style={styles.form}>
             <TextInput style={styles.input} value={probleme} onChangeText={setProbleme} placeholder="Problème constaté" multiline />
             <TextInput style={styles.input} value={action} onChangeText={setAction} placeholder="Action réalisée" multiline />
-            <TextInput style={styles.input} value={responsableAction} onChangeText={setResponsableAction} placeholder="Responsable" />
+            <Text style={styles.scheduleInfo}>Effectué par : {utilisateurActif?.nom ?? "Profil non sélectionné"}</Text>
             <TextInput style={styles.input} value={dateAction} onChangeText={setDateAction} placeholder="Date" />
             <TextInput style={styles.input} value={resolution} onChangeText={setResolution} placeholder="Résolution" multiline />
             <Pressable style={styles.primaryButton} onPress={enregistrerAction}>
