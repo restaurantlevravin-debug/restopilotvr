@@ -4,6 +4,7 @@ import { Pressable, SafeAreaView, StyleSheet, Text } from "react-native";
 import DashboardGerant from "@/components/dashboard/DashboardGerant";
 import { PointagePadProvider } from "@/context/PointagePadContext";
 import { useUser } from "@/context/UserContext";
+import { ValidationHeuresProvider } from "@/context/ValidationHeuresContext";
 
 export default function DashboardGerantScreen() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function DashboardGerantScreen() {
 
   return (
     <PointagePadProvider mode="GESTION_GERANT">
-      <SafeAreaView style={styles.ecran}>
+      <ValidationHeuresProvider><SafeAreaView style={styles.ecran}>
         <Stack.Screen options={{ title: "Dashboard Gérant", headerShown: false }} />
         <Pressable
           accessibilityRole="button"
@@ -37,7 +38,7 @@ export default function DashboardGerantScreen() {
           <Text style={styles.retourTexte}>‹ Retour</Text>
         </Pressable>
         <DashboardGerant />
-      </SafeAreaView>
+      </SafeAreaView></ValidationHeuresProvider>
     </PointagePadProvider>
   );
 }

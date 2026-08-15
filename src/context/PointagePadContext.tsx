@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useState } from "react";
 
 import { hasPermission } from "@/constants/permissions";
-import { obtenirCleStockagePointages } from "@/constants/storage";
+import { obtenirCleConfigurationPad, obtenirCleStockagePointages } from "@/constants/storage";
 import { useEntreprise } from "@/context/EntrepriseContext";
 import { useUser } from "@/context/UserContext";
 import { useValidation } from "@/context/ValidationContext";
@@ -13,6 +13,7 @@ import type {
   ModificationPointage,
   Pointage,
 } from "@/types/pointage";
+import type { ConfigurationPad } from "@/types/pad";
 import type { IdentiteValidation, ValidationAction } from "@/types/validation";
 
 export type {
@@ -28,9 +29,17 @@ export type ModePointage = "PAD_CENTRAL" | "GESTION_GERANT";
 
 type PointagePadContextType = {
   mode: ModePointage;
+  configurationPad: ConfigurationPad | null;
+  creerConfigurationPad: (nom: string) => Promise<ConfigurationPad | null>;
   ambiancePointage: AmbiancePointage | null;
   fermerAmbiancePointage: () => void;
   enregistrerPointage: (demande: DemandePointage) => Promise<Pointage | null>;
+  pointerArrivee: (utilisateurId: string, pin: string) => Promise<Pointage | null>;
+  pointerDepartPause: (utilisateurId: string, pin: string) => Promise<Pointage | null>;
+  pointerReprisePause: (utilisateurId: string, pin: string) => Promise<Pointage | null>;
+  pointerDepartService: (utilisateurId: string, pin: string) => Promise<Pointage | null>;
+  obtenirPointagesJour: (date?: string) => Pointage[];
+  obtenirPointagesUtilisateur: (utilisateurId: string) => Pointage[];
   obtenirHistoriqueUtilisateur: (utilisateurId: string) => Pointage[];
   obtenirPointagesGerant: (date?: string) => Pointage[];
   corrigerPointage: (
@@ -69,12 +78,36 @@ export function PointagePadProvider({
   const { utilisateurs, utilisateurActif } = useUser();
   const { validerAction } = useValidation();
   const [pointages, setPointages] = useState<Pointage[]>([]);
+  const [configurationPad, setConfigurationPad] = useState<ConfigurationPad | null>(null);
   const [ambiancePointage, setAmbiancePointage] =
     useState<AmbiancePointage | null>(null);
 
   useEffect(() => {
     void chargerPointages();
+    void chargerConfigurationPad();
   }, [entrepriseActive?.id]);
+
+  async function chargerConfigurationPad() {
+    if (!entrepriseActive) { setConfigurationPad(null); return; }
+    const stockage = await AsyncStorage.getItem(obtenirCleConfigurationPad(entrepriseActive.id));
+    const configuration = stockage ? JSON.parse(stockage) as ConfigurationPad : null;
+    setConfigurationPad(configuration?.entrepriseId === entrepriseActive.id ? configuration : null);
+  }
+
+  async function creerConfigurationPad(nom: string): Promise<ConfigurationPad | null> {
+    if (mode !== "PAD_CENTRAL" || !entrepriseActive || !nom.trim()) return null;
+    if (configurationPad?.entrepriseId === entrepriseActive.id) return configurationPad;
+    const nouvelle: ConfigurationPad = {
+      id: `pad-${entrepriseActive.id}-${Date.now()}`,
+      entrepriseId: entrepriseActive.id,
+      nom: nom.trim(),
+      actif: true,
+      dateCreation: new Date().toISOString(),
+    };
+    await AsyncStorage.setItem(obtenirCleConfigurationPad(entrepriseActive.id), JSON.stringify(nouvelle));
+    setConfigurationPad(nouvelle);
+    return nouvelle;
+  }
 
   async function chargerPointages() {
     const entrepriseId = entrepriseActive?.id;
@@ -120,7 +153,12 @@ export function PointagePadProvider({
   ): Promise<Pointage | null> {
     const entrepriseId = entrepriseActive?.id;
 
-    if (mode !== "PAD_CENTRAL" || !entrepriseId) {
+    if (
+      mode !== "PAD_CENTRAL"
+      || !entrepriseId
+      || !configurationPad?.actif
+      || configurationPad.entrepriseId !== entrepriseId
+    ) {
       return null;
     }
 
@@ -133,6 +171,9 @@ export function PointagePadProvider({
         )
       : utilisateursEntreprise.filter(
           (utilisateur) =>
+            utilisateur.id === demande.utilisateurId
+            && utilisateur.actif
+            &&
             (utilisateur.pinValidation ?? utilisateur.pin) === demande.pin
         );
 
@@ -150,6 +191,7 @@ export function PointagePadProvider({
       type: demande.type,
       methode: demande.methode,
       planningId: demande.planningId,
+      commentaire: demande.commentaire,
     };
 
     await sauvegarder([...pointages, pointage]);
@@ -176,6 +218,37 @@ export function PointagePadProvider({
 
   function fermerAmbiancePointage() {
     setAmbiancePointage(null);
+  }
+
+  function pointer(type: Pointage["type"], utilisateurId: string, pin: string) {
+    return enregistrerPointage({ type, methode: "PIN", utilisateurId, pin });
+  }
+
+  function pointerArrivee(utilisateurId: string, pin: string) {
+    return pointer("ARRIVEE", utilisateurId, pin);
+  }
+
+  function pointerDepartPause(utilisateurId: string, pin: string) {
+    return pointer("DEPART_PAUSE", utilisateurId, pin);
+  }
+
+  function pointerReprisePause(utilisateurId: string, pin: string) {
+    return pointer("REPRISE_PAUSE", utilisateurId, pin);
+  }
+
+  function pointerDepartService(utilisateurId: string, pin: string) {
+    return pointer("DEPART_SERVICE", utilisateurId, pin);
+  }
+
+  function obtenirPointagesJour(date = formaterDateLocale(new Date())) {
+    if (mode !== "PAD_CENTRAL") return [];
+    return pointages.filter((pointage) => pointage.date === date);
+  }
+
+  function obtenirPointagesUtilisateur(utilisateurId: string) {
+    if (mode !== "PAD_CENTRAL") return [];
+    const appartientEntreprise = utilisateurs.some((utilisateur) => utilisateur.id === utilisateurId && utilisateur.entrepriseId === entrepriseActive?.id);
+    return appartientEntreprise ? pointages.filter((pointage) => pointage.utilisateurId === utilisateurId) : [];
   }
 
   function obtenirHistoriqueUtilisateur(utilisateurId: string): Pointage[] {
@@ -257,9 +330,17 @@ export function PointagePadProvider({
     <PointagePadContext.Provider
       value={{
         mode,
+        configurationPad,
+        creerConfigurationPad,
         ambiancePointage,
         fermerAmbiancePointage,
         enregistrerPointage,
+        pointerArrivee,
+        pointerDepartPause,
+        pointerReprisePause,
+        pointerDepartService,
+        obtenirPointagesJour,
+        obtenirPointagesUtilisateur,
         obtenirHistoriqueUtilisateur,
         obtenirPointagesGerant,
         corrigerPointage,

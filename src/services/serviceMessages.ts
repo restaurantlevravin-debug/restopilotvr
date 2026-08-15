@@ -36,27 +36,10 @@ export function determinerTypeServiceAmbiance(
   pointage: Pointage,
   historique: Pointage[]
 ): TypeServiceAmbiance {
-  const pointagesDuJour = historique.filter(
-    (element) =>
-      element.utilisateurId === pointage.utilisateurId
-      && element.date === pointage.date
-      && element.id !== pointage.id
-  );
-
-  if (pointage.type === "ARRIVEE") {
-    return pointagesDuJour.some((element) => element.type === "DEPART")
-      ? "REPRISE_SOIR"
-      : "ARRIVEE_MATIN";
-  }
-
-  const nombreArrivees = pointagesDuJour.filter(
-    (element) => element.type === "ARRIVEE"
-  ).length;
-  const heure = Number(pointage.heure.slice(0, 2));
-
-  return nombreArrivees > 1 || heure >= 18
-    ? "DEPART_FIN_JOURNEE"
-    : "DEPART_COUPURE";
+  if (pointage.type === "ARRIVEE") return "ARRIVEE_MATIN";
+  if (pointage.type === "DEPART_PAUSE") return "DEPART_COUPURE";
+  if (pointage.type === "REPRISE_PAUSE") return "REPRISE_SOIR";
+  return "DEPART_FIN_JOURNEE";
 }
 
 export function creerAmbiancePointage({

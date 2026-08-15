@@ -57,6 +57,9 @@ export type Utilisateur = {
   email: string;
   role: RoleUtilisateur;
   poste?: string;
+  contrat?: string;
+  heuresContractuelles?: number;
+  consultationDocumentsAutorisee?: boolean;
   actif: boolean;
   pinValidation?: string;
   /** @deprecated Utiliser pinValidation pour les nouvelles validations. */

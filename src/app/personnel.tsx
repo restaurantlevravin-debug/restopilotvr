@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { type Href, useRouter } from "expo-router";
 import {
   Pressable,
   ScrollView,
@@ -8,6 +8,7 @@ import {
 } from "react-native";
 
 import { usePersonnel } from "@/context/PersonnelContext";
+import { useUser } from "@/context/UserContext";
 
 
 export default function Personnel() {
@@ -15,6 +16,7 @@ export default function Personnel() {
   const router = useRouter();
 
   const { personnel } = usePersonnel();
+  const { utilisateurActif } = useUser();
 
 
   return (
@@ -36,6 +38,13 @@ export default function Personnel() {
     ➕ Nouveau salarié
   </Text>
 </Pressable>
+
+{utilisateurActif?.role === "GERANT" ? <Pressable
+  style={styles.documentsButton}
+  onPress={() => router.push("/personnel/documents" as Href)}
+>
+  <Text style={styles.buttonText}>📂 Dossiers administratifs numériques</Text>
+</Pressable> : null}
 
 <Pressable
   style={styles.registerButton}
@@ -212,6 +221,14 @@ const styles = StyleSheet.create({
   },
 registerButton:{
   backgroundColor:"#B08D57",
+  padding:18,
+  borderRadius:12,
+  marginBottom:30,
+},
+documentsButton:{
+  backgroundColor:"#17120A",
+  borderColor:"#D7A83E",
+  borderWidth:1,
   padding:18,
   borderRadius:12,
   marginBottom:30,

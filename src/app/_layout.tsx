@@ -14,6 +14,8 @@ import { HaccpProvider } from "@/context/HaccpContext";
 import { RewardProvider } from "@/context/RewardContext";
 import { ClotureJourneeProvider } from "@/context/ClotureJourneeContext";
 import { AnomalieHaccpProvider } from "@/context/AnomalieHaccpContext";
+import { PlanningProvider } from "@/context/PlanningContext";
+import { DocumentProvider } from "@/context/DocumentContext";
 
 
 export default function RootLayout() {
@@ -28,6 +30,10 @@ export default function RootLayout() {
       <EntrepriseProvider>
 
         <UserProvider>
+
+          <DocumentProvider>
+
+          <PlanningProvider>
 
           <ValidationProvider>
 
@@ -64,6 +70,10 @@ export default function RootLayout() {
             </ClotureJourneeProvider>
 
           </ValidationProvider>
+
+          </PlanningProvider>
+
+          </DocumentProvider>
 
         </UserProvider>
 

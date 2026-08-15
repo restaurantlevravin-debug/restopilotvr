@@ -27,9 +27,14 @@ export default function Home() {
         </TouchableOpacity>
       </Link>
 
-      <TouchableOpacity style={styles.button}>
-        <Text style={styles.buttonText}>📅 Planning</Text>
-      </TouchableOpacity>
+      <Link
+        href={(utilisateurActif?.role === "GERANT" ? "/planning/gestion" : "/mon-planning") as Href}
+        asChild
+      >
+        <TouchableOpacity style={styles.button}>
+          <Text style={styles.buttonText}>📅 {utilisateurActif?.role === "GERANT" ? "Planning mensuel" : "Mon planning"}</Text>
+        </TouchableOpacity>
+      </Link>
 
       <Link href="/haccp" asChild>
         <TouchableOpacity style={styles.button}>
@@ -38,17 +43,32 @@ export default function Home() {
       </Link>
 
       {utilisateurActif?.role === "GERANT" ? (
-        <Link href={"/dashboard-gerant" as Href} asChild>
-          <TouchableOpacity style={styles.imperialButton}>
-            <Text style={styles.buttonText}>👑 Dashboard Gérant</Text>
-          </TouchableOpacity>
-        </Link>
+        <>
+          <Link href={"/dashboard-gerant" as Href} asChild>
+            <TouchableOpacity style={styles.imperialButton}>
+              <Text style={styles.buttonText}>👑 Dashboard Gérant</Text>
+            </TouchableOpacity>
+          </Link>
+          <Link href={"/personnel/documents" as Href} asChild>
+            <TouchableOpacity style={styles.imperialButton}>
+              <Text style={styles.buttonText}>📂 Dossiers administratifs</Text>
+            </TouchableOpacity>
+          </Link>
+        </>
       ) : null}
 
       {utilisateurActif && utilisateurActif.role !== "GERANT" ? (
         <Link href={"/profil-imperial" as Href} asChild>
           <TouchableOpacity style={styles.imperialButton}>
             <Text style={styles.buttonText}>👑 Mon profil impérial</Text>
+          </TouchableOpacity>
+        </Link>
+      ) : null}
+
+      {utilisateurActif?.role !== "GERANT" && utilisateurActif?.consultationDocumentsAutorisee ? (
+        <Link href={"/mes-documents" as Href} asChild>
+          <TouchableOpacity style={styles.imperialButton}>
+            <Text style={styles.buttonText}>📄 Mes documents</Text>
           </TouchableOpacity>
         </Link>
       ) : null}

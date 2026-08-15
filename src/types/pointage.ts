@@ -1,6 +1,10 @@
 import type { MethodeValidation } from "@/types/validation";
 
-export type TypePointage = "ARRIVEE" | "DEPART";
+export type TypePointage =
+  | "ARRIVEE"
+  | "DEPART_PAUSE"
+  | "REPRISE_PAUSE"
+  | "DEPART_SERVICE";
 
 export type Pointage = {
   id: string;
@@ -10,6 +14,7 @@ export type Pointage = {
   heure: string;
   type: TypePointage;
   methode: MethodeValidation;
+  commentaire?: string;
   planningId?: string;
   correction?: CorrectionPointage;
 };
@@ -31,12 +36,14 @@ export type IdentificationPointage =
     }
   | {
       methode: "PIN";
+      utilisateurId: string;
       pin: string;
     };
 
 export type DemandePointage = IdentificationPointage & {
   type: TypePointage;
   planningId?: string;
+  commentaire?: string;
 };
 
 export type ModificationPointage = Partial<

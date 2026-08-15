@@ -15,12 +15,16 @@ import {
 import { rewards } from "@/constants/rewards";
 import { obtenirCleStockageClassementImperial } from "@/constants/storage";
 import { useEntreprise } from "@/context/EntrepriseContext";
+import { useDocuments } from "@/context/DocumentContext";
+import { router, type Href } from "expo-router";
 import { useClotureJournee } from "@/context/ClotureJourneeContext";
 import { useHaccp } from "@/context/HaccpContext";
 import { usePointagePad } from "@/context/PointagePadContext";
+import { usePlanning } from "@/context/PlanningContext";
 import { useRewards } from "@/context/RewardContext";
 import { useUser } from "@/context/UserContext";
 import { useValidation } from "@/context/ValidationContext";
+import { useValidationHeures } from "@/context/ValidationHeuresContext";
 import type {
   AlerteDashboard,
   DashboardEntreprise,
@@ -70,9 +74,14 @@ function pluriel(nombre: number, singulier: string, plurielTexte: string) {
   return `${nombre} ${nombre > 1 ? plurielTexte : singulier}`;
 }
 
+function formaterMinutes(minutes: number) {
+  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
+}
+
 export default function DashboardGerant() {
   const { entrepriseActive } = useEntreprise();
   const { utilisateurs } = useUser();
+  const { documents, obtenirAlertesDocuments } = useDocuments();
   const {
     releves,
     actions,
@@ -82,6 +91,8 @@ export default function DashboardGerant() {
   const { validations } = useValidation();
   const { obtenirProfilImperial } = useRewards();
   const { obtenirPointagesGerant } = usePointagePad();
+  const { obtenirComparaisonPlanningPointage } = usePlanning();
+  const { creerValidationMensuelle, obtenirValidationMensuelle, obtenirSyntheseMois } = useValidationHeures();
   const {
     clotureExploitation,
     terminerExploitation,
@@ -89,6 +100,11 @@ export default function DashboardGerant() {
     rouvrirExceptionnellement,
   } = useClotureJournee();
   const [classementActif, setClassementActif] = useState(true);
+  const maintenant = new Date();
+  const moisValidation = maintenant.getMonth() + 1;
+  const anneeValidation = maintenant.getFullYear();
+  const validationHeures = obtenirValidationMensuelle(moisValidation, anneeValidation);
+  const syntheseHeures = obtenirSyntheseMois(moisValidation, anneeValidation);
   const apparition = useRef(new Animated.Value(0)).current;
   const dateIso = clotureExploitation?.dateDebutExploitation
     ?? formaterDateIso(new Date());
@@ -103,6 +119,10 @@ export default function DashboardGerant() {
       useNativeDriver: true,
     }).start();
   }, [apparition]);
+
+  useEffect(() => {
+    if (!validationHeures) void creerValidationMensuelle(moisValidation, anneeValidation);
+  }, [anneeValidation, moisValidation, validationHeures]);
 
   useEffect(() => {
     void chargerReglageClassement();
@@ -282,6 +302,11 @@ export default function DashboardGerant() {
   }
 
   const pointagesDuJour = obtenirPointagesGerant(dateIso);
+  const comparaisonTemps = obtenirComparaisonPlanningPointage(dateIso, pointagesDuJour);
+  const totalTempsPrevu = comparaisonTemps.reduce((total, element) => total + element.tempsPrevu, 0);
+  const totalTempsReel = comparaisonTemps.reduce((total, element) => total + element.tempsReel, 0);
+  const totalEcart = totalTempsReel - totalTempsPrevu;
+  const heuresSupplementairesPotentielles = comparaisonTemps.reduce((total, element) => total + Math.max(0, element.ecart), 0);
   const salariesActifs = new Set(
     pointagesDuJour.map((pointage) => pointage.utilisateurId)
   ).size;
@@ -329,6 +354,9 @@ export default function DashboardGerant() {
       actionsObligatoiresControlees,
     },
   };
+  const alertesDocuments = obtenirAlertesDocuments();
+  const documentsExpires = documents.filter((document) => document.statut === "EXPIRE").length;
+  const documentsASurveiller = documents.filter((document) => document.statut === "A_SURVEILLER").length;
 
   async function handleTerminerExploitation() {
     const succes = await terminerExploitation(resumeCloture);
@@ -384,6 +412,27 @@ export default function DashboardGerant() {
           </View>
         </View>
 
+        <SectionTitre>⏱️ Suivi des heures</SectionTitre>
+        <Pressable style={styles.carteStandard} onPress={() => router.push("/planning/ecarts" as Href)}>
+          <View style={styles.grilleStats}>
+            <Stat label="Heures prévues" value={formaterMinutes(totalTempsPrevu)} />
+            <Stat label="Heures réalisées" value={formaterMinutes(totalTempsReel)} />
+            <Stat label="Écart" value={`${totalEcart >= 0 ? "+" : "-"}${formaterMinutes(Math.abs(totalEcart))}`} />
+            <Stat label="Sup. potentielles" value={formaterMinutes(heuresSupplementairesPotentielles)} />
+          </View>
+          <Text style={styles.lienDocuments}>Voir l’analyse du jour ›</Text>
+        </Pressable>
+
+        <SectionTitre>⏱️ Validation des heures</SectionTitre>
+        <Pressable style={styles.carteStandard} onPress={() => router.push("/planning/validation-heures" as Href)}>
+          <View style={styles.grilleStats}>
+            <Stat label="Mois en cours" value={new Date(anneeValidation, moisValidation - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })} />
+            <Stat label="Heures à valider" value={formaterMinutes(syntheseHeures?.totalRealiseMinutes ?? 0)} />
+            <Stat label="Statut" value={(validationHeures?.statut ?? "EN_COURS").replaceAll("_", " ")} />
+          </View>
+          <Text style={styles.lienDocuments}>Contrôler et valider le mois ›</Text>
+        </Pressable>
+
         <SectionTitre>Alertes du jour</SectionTitre>
         <View style={styles.carteStandard}>
           {dashboard.alertes.map((alerte) => (
@@ -397,6 +446,15 @@ export default function DashboardGerant() {
             </View>
           ))}
         </View>
+
+        <SectionTitre>📄 Alertes documents</SectionTitre>
+        <Pressable style={styles.carteStandard} onPress={() => router.push("/personnel/documents-alertes" as Href)}>
+          {alertesDocuments.length === 0 ? <Text style={styles.texteSecondaire}>Aucun document à surveiller.</Text> : alertesDocuments.slice(0, 4).map((alerte) => {
+            const salarie = utilisateurs.find((utilisateur) => utilisateur.id === alerte.document.utilisateurId);
+            return <View key={alerte.document.id} style={styles.alerteLigne}><View style={[styles.pointAlerte, { backgroundColor: alerte.niveau === "EXPIRE" ? "#D65A50" : "#E2A63B" }]} /><View style={styles.documentAlerteContenu}><Text style={styles.alerteTexte}>{alerte.document.nom} - {salarie?.nom ?? "Salarié"}</Text><Text style={styles.documentAlerteDate}>Expire le {alerte.document.dateExpiration ? new Date(`${alerte.document.dateExpiration}T12:00:00`).toLocaleDateString("fr-FR") : "—"}</Text></View></View>;
+          })}
+          <Text style={styles.lienDocuments}>{documentsASurveiller} à surveiller · {documentsExpires} expiré(s) ›</Text>
+        </Pressable>
 
         <SectionTitre>Équipe impériale</SectionTitre>
         {dashboard.equipe.length === 0 ? (
@@ -635,4 +693,7 @@ const styles = StyleSheet.create({
   notificationTitre: { color: OR_CLAIR, fontSize: 12, fontWeight: "900", textAlign: "center" },
   notificationTexte: { color: "#B9AD95", fontSize: 11, lineHeight: 16, marginTop: 4, textAlign: "center" },
   titreCarte: { color: OR_CLAIR, fontSize: 20, fontWeight: "900" },
+  lienDocuments: { color: OR_CLAIR, fontSize: 12, fontWeight: "800", textAlign: "center", marginTop: 12 },
+  documentAlerteContenu: { flex: 1 },
+  documentAlerteDate: { color: "#918670", fontSize: 11, marginTop: 2 },
 });
