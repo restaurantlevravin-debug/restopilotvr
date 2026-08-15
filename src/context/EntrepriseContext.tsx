@@ -6,14 +6,9 @@ import React, {
 } from "react";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { Entreprise } from "@/types/entreprise";
 
-
-export type Entreprise = {
-  id: string;
-  nom: string;
-  adresse?: string;
-  actif: boolean;
-};
+export type { Entreprise } from "@/types/entreprise";
 
 
 type EntrepriseContextType = {
@@ -25,6 +20,7 @@ type EntrepriseContextType = {
 
 
 const STOCKAGE_ENTREPRISES = "RESTOPILOT_ENTREPRISES";
+const STOCKAGE_ENTREPRISE_ACTIVE = "RESTOPILOT_ENTREPRISE_ACTIVE";
 
 
 const EntrepriseContext = createContext<EntrepriseContextType | null>(null);
@@ -47,15 +43,26 @@ export function EntrepriseProvider({
 
   async function charger() {
 
-    const data = await AsyncStorage.getItem(STOCKAGE_ENTREPRISES);
+    try {
+      const [data, idActif] = await Promise.all([
+        AsyncStorage.getItem(STOCKAGE_ENTREPRISES),
+        AsyncStorage.getItem(STOCKAGE_ENTREPRISE_ACTIVE),
+      ]);
 
-    if (data) {
-      const liste = JSON.parse(data);
-      setEntreprises(liste);
-
-      if (liste.length > 0) {
-        setEntrepriseActive(liste[0]);
+      if (!data) {
+        return;
       }
+
+      const liste = JSON.parse(data) as Entreprise[];
+      const active = liste.find((entreprise) => entreprise.id === idActif)
+        ?? liste[0];
+
+      setEntreprises(liste);
+      setEntrepriseActive(active);
+    } catch (error) {
+      console.error("Erreur chargement entreprises", error);
+      setEntreprises([]);
+      setEntrepriseActive(undefined);
     }
 
   }
@@ -65,12 +72,16 @@ export function EntrepriseProvider({
     entreprise: Omit<Entreprise, "id">
   ) {
 
-    const nouvelle = {
+    const nouvelle: Entreprise = {
       id: Date.now().toString(),
       ...entreprise,
     };
 
-    const liste = [...entreprises, nouvelle];
+    const stockage = await AsyncStorage.getItem(STOCKAGE_ENTREPRISES);
+    const listeExistante = stockage
+      ? JSON.parse(stockage) as Entreprise[]
+      : entreprises;
+    const liste = [...listeExistante, nouvelle];
 
     setEntreprises(liste);
 
@@ -79,13 +90,24 @@ export function EntrepriseProvider({
       JSON.stringify(liste)
     );
 
+    if (!entrepriseActive) {
+      setEntrepriseActive(nouvelle);
+      await AsyncStorage.setItem(STOCKAGE_ENTREPRISE_ACTIVE, nouvelle.id);
+    }
+
   }
 
 
   async function changerEntreprise(id: string) {
 
     const entreprise = entreprises.find((e) => e.id === id);
+
+    if (!entreprise) {
+      return;
+    }
+
     setEntrepriseActive(entreprise);
+    await AsyncStorage.setItem(STOCKAGE_ENTREPRISE_ACTIVE, entreprise.id);
 
   }
 

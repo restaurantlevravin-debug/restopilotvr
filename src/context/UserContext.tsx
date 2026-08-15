@@ -1,99 +1,61 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { createContext, useContext, useEffect, useState } from "react";
 
 import { useEntreprise } from "@/context/EntrepriseContext";
+import type {
+  Permission,
+  PermissionsUtilisateur,
+  RoleUtilisateur,
+  Utilisateur,
+} from "@/types/entreprise";
 
-export type RoleUtilisateur =
-  | "GERANT"
-  | "CHEF_CUISINE"
-  | "MAITRE_HOTEL"
-  | "SALARIE";
+export type {
+  Permission,
+  PermissionsUtilisateur,
+  RoleUtilisateur,
+  Utilisateur,
+} from "@/types/entreprise";
 
-export type PermissionUtilisateur =
-  | "administrationEntreprise"
-  | "gererEntreprise"
-  | "gererUtilisateurs"
-  | "modifierConfigurationHaccp"
-  | "releverTemperature"
-  | "gererDlc"
-  | "gererTracabilite"
-  | "traiterAnomalies"
-  | "validerHaccp"
-  | "signerHaccp";
-
-export type PermissionsUtilisateur = {
-  administrationEntreprise: boolean;
-  gererEntreprise: boolean;
-  gererUtilisateurs: boolean;
-  modifierConfigurationHaccp: boolean;
-  releverTemperature: boolean;
-  gererDlc: boolean;
-  gererTracabilite: boolean;
-  traiterAnomalies: boolean;
-  validerHaccp: boolean;
-  signerHaccp: boolean;
-};
-
-export type Utilisateur = {
-  id: string;
-  nom: string;
-  email: string;
-  role: RoleUtilisateur;
-  entrepriseId: string;
-  actif: boolean;
-  pin?: string;
-};
-
-export const PERMISSIONS_PAR_ROLE: Record<RoleUtilisateur, PermissionsUtilisateur> = {
+export const PERMISSIONS_PAR_ROLE: Record<
+  RoleUtilisateur,
+  Readonly<PermissionsUtilisateur>
+> = {
   GERANT: {
-    gererEntreprise: true,
-    gererUtilisateurs: true,
-    modifierConfigurationHaccp: true,
-    releverTemperature: true,
-    gererDlc: true,
-    gererTracabilite: true,
-    traiterAnomalies: true,
-    validerHaccp: true,
-    signerHaccp: true,
+    administrationEntreprise: true,
+    gestionUtilisateurs: true,
+    configurationHaccp: true,
+    gestionPlanning: true,
+    validationJournee: true,
   },
   CHEF_CUISINE: {
-    gererEntreprise: false,
-    gererUtilisateurs: false,
-    modifierConfigurationHaccp: false,
-    releverTemperature: true,
-    gererDlc: true,
-    gererTracabilite: true,
-    traiterAnomalies: true,
-    validerHaccp: true,
-    signerHaccp: true,
+    administrationEntreprise: false,
+    gestionUtilisateurs: false,
+    configurationHaccp: true,
+    gestionPlanning: true,
+    validationJournee: true,
   },
   MAITRE_HOTEL: {
-    gererEntreprise: false,
-    gererUtilisateurs: false,
-    modifierConfigurationHaccp: false,
-    releverTemperature: true,
-    gererDlc: true,
-    gererTracabilite: true,
-    traiterAnomalies: true,
-    validerHaccp: true,
-    signerHaccp: true,
+    administrationEntreprise: false,
+    gestionUtilisateurs: false,
+    configurationHaccp: false,
+    gestionPlanning: true,
+    validationJournee: true,
   },
   SALARIE: {
-    gererEntreprise: false,
-    gererUtilisateurs: false,
-    modifierConfigurationHaccp: false,
-    releverTemperature: true,
-    gererDlc: true,
-    gererTracabilite: true,
-    traiterAnomalies: true,
-    validerHaccp: false,
-    signerHaccp: false,
+    administrationEntreprise: false,
+    gestionUtilisateurs: false,
+    configurationHaccp: false,
+    gestionPlanning: false,
+    validationJournee: false,
   },
+};
+
+const AUCUNE_PERMISSION: Readonly<PermissionsUtilisateur> = {
+  administrationEntreprise: false,
+  gestionUtilisateurs: false,
+  configurationHaccp: false,
+  gestionPlanning: false,
+  validationJournee: false,
 };
 
 const STOCKAGE_USERS_PREFIX = "RESTOPILOT_USERS_";
@@ -102,45 +64,34 @@ function obtenirCleStockageUtilisateurs(entrepriseId: string): string {
   return `${STOCKAGE_USERS_PREFIX}${entrepriseId}`;
 }
 
-function permissionsParDefaut(): PermissionsUtilisateur {
-  return {
-    gererEntreprise: false,
-    gererUtilisateurs: false,
-    modifierConfigurationHaccp: false,
-    releverTemperature: false,
-    gererDlc: false,
-    gererTracabilite: false,
-    traiterAnomalies: false,
-    validerHaccp: false,
-    signerHaccp: false,
-  };
-}
-
 export function hasPermission(
   utilisateur: Utilisateur | null | undefined,
-  permission: PermissionUtilisateur
+  permission: Permission
 ): boolean {
-  if (!utilisateur) {
-    return false;
-  }
-
-  return PERMISSIONS_PAR_ROLE[utilisateur.role][permission];
+  return utilisateur
+    ? PERMISSIONS_PAR_ROLE[utilisateur.role][permission]
+    : false;
 }
+
+type NouvelUtilisateur = Omit<Utilisateur, "id" | "entrepriseId">;
+type ModificationUtilisateur = Partial<
+  Omit<Utilisateur, "id" | "entrepriseId">
+>;
 
 type UserContextType = {
   utilisateurs: Utilisateur[];
   utilisateurActif?: Utilisateur;
-  ajouterUtilisateur: (utilisateur: Omit<Utilisateur, "id">) => Promise<void>;
+  ajouterUtilisateur: (utilisateur: NouvelUtilisateur) => Promise<void>;
   modifierUtilisateur: (
     id: string,
-    utilisateur: Partial<Omit<Utilisateur, "id">>
+    utilisateur: ModificationUtilisateur
   ) => Promise<void>;
   supprimerUtilisateur: (id: string) => Promise<void>;
   changerUtilisateurActif: (id: string) => Promise<void>;
   obtenirPermissionsUtilisateur: (
     utilisateur?: Utilisateur | null
   ) => PermissionsUtilisateur;
-  verifierPermission: (permission: PermissionUtilisateur) => boolean;
+  verifierPermission: (permission: Permission) => boolean;
   verifierPin: (pin: string) => boolean;
 };
 
@@ -152,62 +103,81 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [utilisateurActif, setUtilisateurActif] = useState<Utilisateur>();
 
   useEffect(() => {
-    chargerUtilisateurs();
+    void chargerUtilisateurs();
   }, [entrepriseActive?.id]);
 
   async function chargerUtilisateurs() {
-    if (!entrepriseActive?.id) {
-      setUtilisateurs([]);
-      setUtilisateurActif(undefined);
-      return;
-    }
+    const entrepriseId = entrepriseActive?.id;
 
-    const cle = obtenirCleStockageUtilisateurs(entrepriseActive.id);
-    const data = await AsyncStorage.getItem(cle);
-
-    if (!data) {
+    if (!entrepriseId) {
       setUtilisateurs([]);
       setUtilisateurActif(undefined);
       return;
     }
 
     try {
-      const liste = JSON.parse(data) as Utilisateur[];
-      setUtilisateurs(liste);
+      const data = await AsyncStorage.getItem(
+        obtenirCleStockageUtilisateurs(entrepriseId)
+      );
+      const listeStockee = data ? JSON.parse(data) as Utilisateur[] : [];
+      const liste = listeStockee
+        .map((utilisateur) => ({
+          ...utilisateur,
+          entrepriseId: utilisateur.entrepriseId || entrepriseId,
+        }))
+        .filter((utilisateur) => utilisateur.entrepriseId === entrepriseId);
 
-      const selectionActuelle =
-        liste.find((u) => u.actif) ?? liste[0] ?? undefined;
-      setUtilisateurActif(selectionActuelle);
+      if (data && listeStockee.some((utilisateur) => !utilisateur.entrepriseId)) {
+        await AsyncStorage.setItem(
+          obtenirCleStockageUtilisateurs(entrepriseId),
+          JSON.stringify(liste)
+        );
+      }
+
+      setUtilisateurs(liste);
+      setUtilisateurActif(
+        liste.find((utilisateur) => utilisateur.actif) ?? liste[0]
+      );
     } catch (error) {
-      console.log("Erreur chargement utilisateurs", error);
+      console.error("Erreur chargement utilisateurs", error);
       setUtilisateurs([]);
       setUtilisateurActif(undefined);
     }
   }
 
   async function sauvegarder(liste: Utilisateur[]) {
-    if (!entrepriseActive?.id) {
+    const entrepriseId = entrepriseActive?.id;
+
+    if (!entrepriseId) {
       return;
     }
 
-    const cle = obtenirCleStockageUtilisateurs(entrepriseActive.id);
-    setUtilisateurs(liste);
-    await AsyncStorage.setItem(cle, JSON.stringify(liste));
+    const listeEntreprise = liste.filter(
+      (utilisateur) => utilisateur.entrepriseId === entrepriseId
+    );
 
-    const utilisateurSelectionne =
-      liste.find((u) => u.actif) ?? liste[0] ?? undefined;
-    setUtilisateurActif(utilisateurSelectionne);
+    setUtilisateurs(listeEntreprise);
+    setUtilisateurActif(
+      listeEntreprise.find((utilisateur) => utilisateur.actif)
+        ?? listeEntreprise[0]
+    );
+    await AsyncStorage.setItem(
+      obtenirCleStockageUtilisateurs(entrepriseId),
+      JSON.stringify(listeEntreprise)
+    );
   }
 
-  async function ajouterUtilisateur(utilisateur: Omit<Utilisateur, "id">) {
-    if (!entrepriseActive?.id) {
+  async function ajouterUtilisateur(utilisateur: NouvelUtilisateur) {
+    const entrepriseId = entrepriseActive?.id;
+
+    if (!entrepriseId) {
       return;
     }
 
     const nouveau: Utilisateur = {
       ...utilisateur,
       id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      entrepriseId: entrepriseActive.id,
+      entrepriseId,
     };
 
     await sauvegarder([...utilisateurs, nouveau]);
@@ -215,65 +185,43 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   async function modifierUtilisateur(
     id: string,
-    utilisateur: Partial<Omit<Utilisateur, "id">>
+    utilisateur: ModificationUtilisateur
   ) {
-    if (!entrepriseActive?.id) {
-      return;
-    }
-
-    const liste = utilisateurs.map((u) => {
-      if (u.id !== id) {
-        return u;
-      }
-
-      return {
-        ...u,
-        ...utilisateur,
-        entrepriseId: entrepriseActive.id,
-      };
-    });
-
-    await sauvegarder(liste);
+    await sauvegarder(
+      utilisateurs.map((existant) =>
+        existant.id === id ? { ...existant, ...utilisateur } : existant
+      )
+    );
   }
 
   async function supprimerUtilisateur(id: string) {
-    const liste = utilisateurs.filter((u) => u.id !== id);
-    await sauvegarder(liste);
+    await sauvegarder(
+      utilisateurs.filter((utilisateur) => utilisateur.id !== id)
+    );
   }
 
   async function changerUtilisateurActif(id: string) {
-    const liste = utilisateurs.map((u) => ({
-      ...u,
-      actif: u.id === id,
-    }));
-
-    await sauvegarder(liste);
+    await sauvegarder(
+      utilisateurs.map((utilisateur) => ({
+        ...utilisateur,
+        actif: utilisateur.id === id,
+      }))
+    );
   }
 
   function obtenirPermissionsUtilisateur(
     utilisateur?: Utilisateur | null
   ): PermissionsUtilisateur {
     const source = utilisateur ?? utilisateurActif;
-
-    if (!source) {
-      return permissionsParDefaut();
-    }
-
-    return {
-      ...PERMISSIONS_PAR_ROLE[source.role],
-    };
+    return { ...(source ? PERMISSIONS_PAR_ROLE[source.role] : AUCUNE_PERMISSION) };
   }
 
-  function verifierPermission(permission: PermissionUtilisateur): boolean {
+  function verifierPermission(permission: Permission): boolean {
     return hasPermission(utilisateurActif, permission);
   }
 
   function verifierPin(pin: string): boolean {
-    if (!utilisateurActif || !utilisateurActif.pin) {
-      return false;
-    }
-
-    return utilisateurActif.pin === pin;
+    return Boolean(utilisateurActif?.pin && utilisateurActif.pin === pin);
   }
 
   return (

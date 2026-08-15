@@ -373,7 +373,7 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
 
 
   async function validerReleve(id:number){
-    if (!verifierPermission("validerHaccp") || !utilisateurActif) {
+    if (!verifierPermission("validationJournee") || !utilisateurActif) {
       return false;
     }
 
@@ -404,7 +404,7 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
 
 
   async function signerRapportHaccp(){
-    if (!verifierPermission("signerHaccp") || !utilisateurActif) {
+    if (!verifierPermission("validationJournee") || !utilisateurActif) {
       return false;
     }
 
