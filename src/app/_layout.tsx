@@ -7,6 +7,8 @@ import {
 import { useColorScheme } from "react-native";
 
 import { PersonnelProvider } from "@/context/PersonnelContext";
+import { EntrepriseProvider } from "@/context/EntrepriseContext";
+import { UserProvider } from "@/context/UserContext";
 import { HaccpProvider } from "@/context/HaccpContext";
 
 
@@ -19,25 +21,33 @@ export default function RootLayout() {
 
     <PersonnelProvider>
 
-      <HaccpProvider>
+      <EntrepriseProvider>
 
-      <ThemeProvider
-        value={
-          colorScheme === "dark"
-            ? DarkTheme
-            : DefaultTheme
-        }
-      >
+        <UserProvider>
 
-        <Stack
-          screenOptions={{
-            headerShown:false,
-          }}
-        />
+          <HaccpProvider>
 
-      </ThemeProvider>
+            <ThemeProvider
+              value={
+                colorScheme === "dark"
+                  ? DarkTheme
+                  : DefaultTheme
+              }
+            >
 
-      </HaccpProvider>
+              <Stack
+                screenOptions={{
+                  headerShown:false,
+                }}
+              />
+
+            </ThemeProvider>
+
+          </HaccpProvider>
+
+        </UserProvider>
+
+      </EntrepriseProvider>
 
     </PersonnelProvider>
 

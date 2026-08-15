@@ -7,7 +7,16 @@ import React, {
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
+import { useEntreprise } from "@/context/EntrepriseContext";
+import { useUser } from "@/context/UserContext";
 
+
+export type UtilisateurTrace = {
+  id:string;
+  nom:string;
+  role:string;
+  date:string;
+};
 
 export type PeriodeReleve = "matin" | "soir";
 
@@ -17,6 +26,7 @@ const TOLERANCE_CRENEAU_MINUTES = 30;
 
 export type ReleveTemperature = {
   id:number;
+  pointControleId?:string;
   periode:PeriodeReleve;
   date:string;
   heure:string;
@@ -29,6 +39,11 @@ export type ReleveTemperature = {
   anomalieTraitee?:boolean;
   heurePrevue?:string;
   dansCreneau?:boolean;
+  effectuePar?:UtilisateurTrace;
+  validePar?:UtilisateurTrace;
+  signePar?:UtilisateurTrace;
+  dateValidation?:string;
+  dateSignature?:string;
 };
 
 export type TraceabiliteProduit = {
@@ -41,6 +56,7 @@ export type TraceabiliteProduit = {
   lot:string;
   commentaire:string;
   photo:string;
+  effectuePar?:UtilisateurTrace;
 };
 
 export type ActionCorrective = {
@@ -52,6 +68,7 @@ export type ActionCorrective = {
   resolution:string;
   commentaire?:string;
   photoPreuve?:string;
+  effectuePar?:UtilisateurTrace;
 };
 
 export type ReglagesNotifications = {
@@ -74,10 +91,27 @@ export type ScoreHaccp = {
 
 export type GradeHaccp = "PADAWAN HACCP" | "MONSTRE HACCP" | "EMPEREUR HACCP";
 
+export type CategoriePointControle = "Froid positif" | "Froid négatif" | "Chaud" | "Refroidissement" | "Autre";
+
+export type FrequenceControle = "matin" | "soir" | "matin-soir";
+
+export type PointControleTemperature = {
+  id: string;
+  nom: string;
+  emplacement: string;
+  categorie: CategoriePointControle;
+  temperatureMin?: number;
+  temperatureMax?: number;
+  frequence: FrequenceControle;
+  actif: boolean;
+  responsablesAssignes: string[];
+};
+
 type DonneesHaccp = {
   releves:ReleveTemperature[];
   traces:TraceabiliteProduit[];
   actions:ActionCorrective[];
+  pointsControle:PointControleTemperature[];
   notifications:ReglagesNotifications;
   score:number;
   scoreHaccp:ScoreHaccp;
@@ -87,10 +121,22 @@ type HaccpContextType = DonneesHaccp & {
   ajouterReleve:(releve:Omit<ReleveTemperature,"id">) => Promise<void>;
   ajouterTrace:(trace:Omit<TraceabiliteProduit,"id">) => Promise<void>;
   ajouterAction:(action:Omit<ActionCorrective,"id">) => Promise<void>;
+  ajouterPointControle:(point:Omit<PointControleTemperature,"id">) => Promise<void>;
+  modifierPointControle:(id:string, point:Omit<PointControleTemperature,"id">) => Promise<void>;
+  supprimerPointControle:(id:string) => Promise<void>;
+  validerReleve:(id:number) => Promise<boolean>;
+  signerRapportHaccp:() => Promise<boolean>;
   configurerNotifications:(reglages:Pick<ReglagesNotifications,"active" | "matinHeure" | "soirHeure">) => Promise<boolean>;
+  obtenirMesControles:() => PointControleTemperature[];
+  obtenirReleve:(id:number) => ReleveTemperature | undefined;
+  modifierReleve:(id:number, releve:Partial<Omit<ReleveTemperature,"id">>) => Promise<void>;
 };
 
-const STOCKAGE_HACCP = "RESTOPILOT_HACCP";
+const STOCKAGE_HACCP_PREFIX = "RESTOPILOT_HACCP_";
+
+function obtenirCleStockageHaccp(entrepriseId: string): string {
+  return `${STOCKAGE_HACCP_PREFIX}${entrepriseId}`;
+}
 
 const REGLAGES_DEFAUT:ReglagesNotifications = {
   active:false,
@@ -103,6 +149,7 @@ const DONNEES_DEFAUT:DonneesHaccp = {
   releves:[],
   traces:[],
   actions:[],
+  pointsControle:[],
   notifications:REGLAGES_DEFAUT,
   score:0,
   scoreHaccp:{
@@ -153,21 +200,46 @@ function lireHeure(heure:string){
 
 export function HaccpProvider({ children }:{ children:React.ReactNode }) {
 
+  const { entrepriseActive } = useEntreprise();
+  const { utilisateurActif, verifierPermission } = useUser();
+
+  function creerTraceUtilisateur() {
+    if (!utilisateurActif) {
+      return undefined;
+    }
+
+    return {
+      id: utilisateurActif.id,
+      nom: utilisateurActif.nom,
+      role: utilisateurActif.role,
+      date: new Date().toLocaleDateString("fr-FR"),
+    } satisfies UtilisateurTrace;
+  }
+
   const [donnees, setDonnees] = useState<DonneesHaccp>(DONNEES_DEFAUT);
 
 
   useEffect(() => {
 
-    chargerHaccp();
+    if (entrepriseActive) {
+      chargerHaccp();
+    } else {
+      setDonnees(DONNEES_DEFAUT);
+    }
 
-  }, []);
+  }, [entrepriseActive?.id]);
 
 
   async function chargerHaccp(){
 
+    if (!entrepriseActive) {
+      return;
+    }
+
     try {
 
-      const stockage = await AsyncStorage.getItem(STOCKAGE_HACCP);
+      const cleStockage = obtenirCleStockageHaccp(entrepriseActive.id);
+      const stockage = await AsyncStorage.getItem(cleStockage);
 
       if (!stockage) {
         return;
@@ -194,6 +266,7 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
         releves:donneesChargees.releves || [],
         traces:donneesChargees.traces || [],
         actions:donneesChargees.actions || [],
+        pointsControle:donneesChargees.pointsControle || [],
         notifications:{
           ...REGLAGES_DEFAUT,
           ...donneesChargees.notifications,
@@ -218,20 +291,26 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
 
   async function sauvegarder(nouvellesDonnees:DonneesHaccp){
 
+    if (!entrepriseActive) {
+      return;
+    }
+
     setDonnees(nouvellesDonnees);
-    await AsyncStorage.setItem(STOCKAGE_HACCP, JSON.stringify(nouvellesDonnees));
+    const cleStockage = obtenirCleStockageHaccp(entrepriseActive.id);
+    await AsyncStorage.setItem(cleStockage, JSON.stringify(nouvellesDonnees));
 
   }
 
 
   async function ajouterReleve(releve:Omit<ReleveTemperature,"id">){
 
+    const traceUtilisateur = creerTraceUtilisateur();
     const points = calculerPointsReleve(releve);
     const progression = calculerProgressionHaccp(donnees.scoreHaccp, releve.conforme, !releve.conforme && Boolean(releve.photo), points);
 
     await sauvegarder({
       ...donnees,
-      releves:[...donnees.releves, { id:Date.now(), ...releve }],
+      releves:[...donnees.releves, { id:Date.now(), ...releve, effectuePar: traceUtilisateur }],
       score:donnees.score + points + progression.pointsRecompense,
       scoreHaccp:progression.scoreHaccp,
     });
@@ -243,7 +322,7 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
 
     await sauvegarder({
       ...donnees,
-      traces:[...donnees.traces, { id:Date.now(), ...trace }],
+      traces:[...donnees.traces, { id:Date.now(), ...trace, effectuePar: creerTraceUtilisateur() }],
     });
 
   }
@@ -253,9 +332,101 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
 
     await sauvegarder({
       ...donnees,
-      actions:[...donnees.actions, { id:Date.now(), ...action }],
+      actions:[...donnees.actions, { id:Date.now(), ...action, effectuePar: creerTraceUtilisateur() }],
     });
 
+  }
+
+
+  async function ajouterPointControle(point:Omit<PointControleTemperature,"id">){
+
+    await sauvegarder({
+      ...donnees,
+      pointsControle:[...donnees.pointsControle, { id:Date.now().toString(), ...point, responsablesAssignes: point.responsablesAssignes || [] }],
+    });
+
+  }
+
+
+  async function modifierPointControle(id:string, point:Omit<PointControleTemperature,"id">){
+
+    const pointsControleModifies = donnees.pointsControle.map((p) =>
+      p.id === id ? { id, ...point } : p
+    );
+
+    await sauvegarder({
+      ...donnees,
+      pointsControle:pointsControleModifies,
+    });
+
+  }
+
+
+  async function supprimerPointControle(id:string){
+
+    await sauvegarder({
+      ...donnees,
+      pointsControle:donnees.pointsControle.filter((p) => p.id !== id),
+    });
+
+  }
+
+
+  async function validerReleve(id:number){
+    if (!verifierPermission("validerHaccp") || !utilisateurActif) {
+      return false;
+    }
+
+    const relevésMisAJour = donnees.releves.map((releve) => {
+      if (releve.id !== id) {
+        return releve;
+      }
+
+      return {
+        ...releve,
+        validePar: {
+          id: utilisateurActif.id,
+          nom: utilisateurActif.nom,
+          role: utilisateurActif.role,
+          date: new Date().toLocaleDateString("fr-FR"),
+        },
+        dateValidation: new Date().toLocaleDateString("fr-FR"),
+      };
+    });
+
+    await sauvegarder({
+      ...donnees,
+      releves: relevésMisAJour,
+    });
+
+    return true;
+  }
+
+
+  async function signerRapportHaccp(){
+    if (!verifierPermission("signerHaccp") || !utilisateurActif) {
+      return false;
+    }
+
+    const traceSignature: UtilisateurTrace = {
+      id: utilisateurActif.id,
+      nom: utilisateurActif.nom,
+      role: utilisateurActif.role,
+      date: new Date().toLocaleDateString("fr-FR"),
+    };
+
+    const relevesSigne = donnees.releves.map((releve) => ({
+      ...releve,
+      signePar: traceSignature,
+      dateSignature: new Date().toLocaleDateString("fr-FR"),
+    }));
+
+    await sauvegarder({
+      ...donnees,
+      releves: relevesSigne,
+    });
+
+    return true;
   }
 
 
@@ -366,6 +537,47 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
   }
 
 
+  function obtenirMesControles(): PointControleTemperature[] {
+    if (!utilisateurActif) {
+      return [];
+    }
+
+    // GERANT voit tous les contrôles
+    if (utilisateurActif.role === "GERANT") {
+      return donnees.pointsControle.filter((p) => p.actif);
+    }
+
+    // Les autres rôles ne voient que les contrôles qui leur sont assignés
+    return donnees.pointsControle.filter(
+      (p) => p.actif && p.responsablesAssignes.includes(utilisateurActif.id)
+    );
+  }
+
+
+  function obtenirReleve(id: number): ReleveTemperature | undefined {
+    return donnees.releves.find((r) => r.id === id);
+  }
+
+
+  async function modifierReleve(id: number, releve: Partial<Omit<ReleveTemperature, "id">>): Promise<void> {
+    const relevesModifies = donnees.releves.map((r) => {
+      if (r.id !== id) {
+        return r;
+      }
+
+      return {
+        ...r,
+        ...releve,
+      };
+    });
+
+    await sauvegarder({
+      ...donnees,
+      releves: relevesModifies,
+    });
+  }
+
+
   return (
     <HaccpContext.Provider
       value={{
@@ -373,7 +585,15 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
         ajouterReleve,
         ajouterTrace,
         ajouterAction,
+        ajouterPointControle,
+        modifierPointControle,
+        supprimerPointControle,
+        validerReleve,
+        signerRapportHaccp,
         configurerNotifications,
+        obtenirMesControles,
+        obtenirReleve,
+        modifierReleve,
       }}
     >
       {children}
