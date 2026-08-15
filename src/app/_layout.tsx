@@ -11,6 +11,9 @@ import { EntrepriseProvider } from "@/context/EntrepriseContext";
 import { UserProvider } from "@/context/UserContext";
 import { ValidationProvider } from "@/context/ValidationContext";
 import { HaccpProvider } from "@/context/HaccpContext";
+import { RewardProvider } from "@/context/RewardContext";
+import { ClotureJourneeProvider } from "@/context/ClotureJourneeContext";
+import { AnomalieHaccpProvider } from "@/context/AnomalieHaccpContext";
 
 
 export default function RootLayout() {
@@ -28,7 +31,13 @@ export default function RootLayout() {
 
           <ValidationProvider>
 
-            <HaccpProvider>
+            <ClotureJourneeProvider>
+
+              <RewardProvider>
+
+              <HaccpProvider>
+
+                <AnomalieHaccpProvider>
 
             <ThemeProvider
               value={
@@ -46,7 +55,13 @@ export default function RootLayout() {
 
             </ThemeProvider>
 
-            </HaccpProvider>
+                </AnomalieHaccpProvider>
+
+              </HaccpProvider>
+
+              </RewardProvider>
+
+            </ClotureJourneeProvider>
 
           </ValidationProvider>
 

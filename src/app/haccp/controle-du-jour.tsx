@@ -12,7 +12,7 @@ import {
   Modal,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 
 import { useHaccp, PointControleTemperature } from "@/context/HaccpContext";
 import { useEntreprise } from "@/context/EntrepriseContext";
@@ -31,11 +31,11 @@ type ControlePoint = {
 
 export default function ControleduJourScreen() {
 
-  const { pointsControle, ajouterReleve } = useHaccp();
+  const { obtenirMesControles, ajouterReleve } = useHaccp();
   const { entrepriseActive } = useEntreprise();
   const { utilisateurActif } = useUser();
 
-  const pointsActifs = pointsControle.filter((p) => p.actif);
+  const pointsActifs = obtenirMesControles();
 
   const [controles, setControles] = useState<ControlePoint[]>(
     pointsActifs.map((point) => ({
@@ -249,14 +249,14 @@ export default function ControleduJourScreen() {
             <Text style={styles.emptyText}>
               Aucun point de contrôle configuré pour {entrepriseActive?.nom ?? "cette entreprise"}.
             </Text>
-            <Pressable
-              style={styles.primaryButton}
-              onPress={() => router.push("/haccp/points-controle")}
-            >
-              <Text style={styles.buttonText}>
-                ⚙️ Configurer les points
-              </Text>
-            </Pressable>
+            {utilisateurActif?.role === "GERANT" && (
+              <Pressable
+                style={styles.primaryButton}
+                onPress={() => router.push("/haccp/configuration" as Href)}
+              >
+                <Text style={styles.buttonText}>⚙️ Configurer les points</Text>
+              </Pressable>
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -410,11 +410,11 @@ export default function ControleduJourScreen() {
           </Text>
 
           <Text style={styles.pointDetail}>
-            📍 {currentControle.point.emplacement}
+            📍 {currentControle.point.zone}
           </Text>
 
           <Text style={styles.pointDetail}>
-            📂 {currentControle.point.categorie}
+            📂 {currentControle.point.typeControle}
           </Text>
 
           <Text style={styles.pointDetail}>

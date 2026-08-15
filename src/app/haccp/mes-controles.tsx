@@ -21,7 +21,7 @@ type ControleSaisi = {
 };
 
 export default function MesControlesScreen() {
-  const { obtenirMesControles, ajouterReleve } = useHaccp();
+  const { obtenirMesControles, ajouterReleve, enregistrerControleRealise } = useHaccp();
   const { utilisateurActif } = useUser();
   const { entrepriseActive } = useEntreprise();
 
@@ -39,7 +39,7 @@ export default function MesControlesScreen() {
       }))
     );
     setEnChargement(false);
-  }, []);
+  }, [entrepriseActive?.id, utilisateurActif?.id]);
 
   const controlesCmpletes = controles.filter((c) => c.complete).length;
   const tousTermines = controlesCmpletes === controles.length && controles.length > 0;
@@ -70,12 +70,13 @@ export default function MesControlesScreen() {
     const controle = controles[index];
 
     if (!controle.temperature.trim()) {
-      Alert.alert("Erreur", "Veuillez entrer la température.");
+      Alert.alert("Erreur", "Veuillez renseigner le résultat du contrôle.");
       return;
     }
 
+    const estTemperature = controle.point.typeControle === "TEMPERATURE";
     const temp = parseFloat(controle.temperature);
-    if (isNaN(temp)) {
+    if (estTemperature && isNaN(temp)) {
       Alert.alert("Erreur", "La température doit être un nombre.");
       return;
     }
@@ -89,18 +90,29 @@ export default function MesControlesScreen() {
         minute: "2-digit",
       });
 
-      await ajouterReleve({
-        pointControleId: controle.point.id,
-        periode: "matin",
-        date: dateReelle,
-        heure: heureReelle,
-        temperature: controle.temperature,
-        responsable: utilisateurActif?.nom ?? "Inconnu",
-        conforme,
-        dansCreneau: true,
-        heurePrevue: "08:00",
-        commentaireAnomalie: !conforme ? "Température hors limites" : undefined,
-      });
+      if (estTemperature) {
+        await ajouterReleve({
+          pointControleId: controle.point.id,
+          periode: "matin",
+          date: dateReelle,
+          heure: heureReelle,
+          temperature: controle.temperature,
+          responsable: utilisateurActif?.nom ?? "Inconnu",
+          conforme,
+          dansCreneau: true,
+          commentaireAnomalie: !conforme ? "Température hors limites" : undefined,
+        });
+      } else {
+        const enregistre = await enregistrerControleRealise({
+          pointControleId: controle.point.id,
+          date: dateReelle,
+          heure: heureReelle,
+          valeur: controle.temperature.trim(),
+          conforme: true,
+          statutValidation: "CLOS",
+        });
+        if (!enregistre) throw new Error("Contrôle non autorisé");
+      }
 
       const nouveaux = [...controles];
       nouveaux[index].complete = true;
@@ -184,22 +196,22 @@ export default function MesControlesScreen() {
             ]}
           >
             <Text style={styles.controleName}>{controle.point.nom}</Text>
-            <Text style={styles.controleLieu}>{controle.point.emplacement}</Text>
+            <Text style={styles.controleLieu}>{controle.point.zone}</Text>
 
             {!controle.complete ? (
               <>
                 <View style={styles.inputRow}>
                   <TextInput
                     style={styles.temperatureInput}
-                    placeholder="Température"
-                    keyboardType="decimal-pad"
+                    placeholder={controle.point.typeControle === "TEMPERATURE" ? "Température" : "Résultat"}
+                    keyboardType={controle.point.typeControle === "TEMPERATURE" ? "decimal-pad" : "default"}
                     value={controle.temperature}
                     onChangeText={(value) =>
                       handleTemperatureChange(index, value)
                     }
                     placeholderTextColor="#999"
                   />
-                  <Text style={styles.unit}>°C</Text>
+                  {controle.point.typeControle === "TEMPERATURE" && <Text style={styles.unit}>°C</Text>}
                 </View>
 
                 {controle.point.temperatureMin !== undefined &&
@@ -224,7 +236,7 @@ export default function MesControlesScreen() {
               <View style={styles.completeStatus}>
                 <Text style={styles.completeStatusText}>✅ Validé</Text>
                 <Text style={styles.completeStatusTime}>
-                  {controle.temperature}°C
+                  {controle.temperature}{controle.point.typeControle === "TEMPERATURE" ? "°C" : ""}
                 </Text>
               </View>
             )}

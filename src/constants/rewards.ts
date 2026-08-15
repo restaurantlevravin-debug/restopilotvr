@@ -15,21 +15,18 @@ export const rewards: readonly Reward[] = [
     name: "Padawan HACCP",
     image: require("../../assets/images/rewards/padawan.png"),
     level: 1,
-    points: 10,
   },
   {
     id: "monstre",
     name: "Monstre HACCP",
     image: require("../../assets/images/rewards/monstre.png"),
     level: 2,
-    points: 50,
   },
   {
     id: "empereur",
     name: "Empereur Impérial",
     image: require("../../assets/images/rewards/empereur.png"),
     level: 3,
-    points: 200,
     title: "Divinité de la conformité",
   },
   {

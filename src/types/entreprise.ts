@@ -42,6 +42,7 @@ export type ExceptionExploitation = {
 export type Entreprise = {
   id: string;
   nom: string;
+  logo?: string;
   adresse?: string;
   actif: boolean;
   joursOuverture: JourOuverture[];

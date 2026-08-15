@@ -278,12 +278,12 @@ function ModalDetailAnomalie({
 
               <View style={styles.ligneDetail}>
                 <Text style={styles.labelDetail}>Emplacement :</Text>
-                <Text style={styles.valeurDetail}>{point.emplacement}</Text>
+                <Text style={styles.valeurDetail}>{point.zone}</Text>
               </View>
 
               <View style={styles.ligneDetail}>
                 <Text style={styles.labelDetail}>Catégorie :</Text>
-                <Text style={styles.valeurDetail}>{point.categorie}</Text>
+                <Text style={styles.valeurDetail}>{point.typeControle}</Text>
               </View>
             </View>
 

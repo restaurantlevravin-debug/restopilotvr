@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 
 import {
   calculerProgressionHaccp,
@@ -49,13 +49,14 @@ export default function Haccp() {
   const {
     notifications,
     scoreHaccp,
-    pointsControle,
+    obtenirMesControles,
     ajouterReleve,
     ajouterTrace,
     ajouterAction,
     configurerNotifications,
   } = useHaccp();
   const { utilisateurActif } = useUser();
+  const pointsAccessibles = obtenirMesControles();
 
   const [afficherReleve, setAfficherReleve] = useState(false);
   const [afficherTrace, setAfficherTrace] = useState(false);
@@ -104,7 +105,7 @@ export default function Haccp() {
     }
 
     // Vérifier la conformité basée sur le point de contrôle
-    const pointControle = pointsControle.find((p) => p.id === pointControleId);
+    const pointControle = pointsAccessibles.find((p) => p.id === pointControleId);
     const tempNumerique = parseFloat(temperature);
     let conformeCalcule = true;
 
@@ -307,14 +308,47 @@ export default function Haccp() {
 
       <Pressable
         style={styles.quickAccessButton}
-        onPress={() => router.push("/haccp/mes-controles")}
+        onPress={() => router.push("/haccp/controle-rapide" as Href)}
       >
-        <Text style={styles.quickAccessText}>⚡ Mes contrôles du jour (Rapide)</Text>
+        <Text style={styles.quickAccessText}>⚡ Mes contrôles HACCP</Text>
       </Pressable>
+
+      <Pressable
+        style={styles.quickAccessButton}
+        onPress={() => router.push("/haccp/anomalies" as Href)}
+      >
+        <Text style={styles.quickAccessText}>⚠️ Mes anomalies déclarées</Text>
+      </Pressable>
+
+      {utilisateurActif && ["GERANT", "CHEF_CUISINE", "MAITRE_HOTEL"].includes(utilisateurActif.role) && (
+        <Pressable
+          style={styles.quickAccessButton}
+          onPress={() => router.push("/haccp/anomalies-validation" as Href)}
+        >
+          <Text style={styles.quickAccessText}>🛡️ Validation des anomalies</Text>
+        </Pressable>
+      )}
+
+      {utilisateurActif?.role === "GERANT" && (
+        <>
+          <Pressable
+            style={styles.quickAccessButton}
+            onPress={() => router.push("/haccp/configuration" as Href)}
+          >
+            <Text style={styles.quickAccessText}>⚙️ Configurer le plan HACCP</Text>
+          </Pressable>
+          <Pressable
+            style={styles.quickAccessButton}
+            onPress={() => router.push("/haccp/rapport" as Href)}
+          >
+            <Text style={styles.quickAccessText}>👑 Rapport Impérial HACCP</Text>
+          </Pressable>
+        </>
+      )}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>🌡️ Relevés températures</Text>
-        <Text style={styles.description}>Deux contrôles quotidiens : 08:00 et 18:00. Rappels {notifications.active ? "activés" : "désactivés"}.</Text>
+        <Text style={styles.description}>Relevés issus des points configurés par votre entreprise. Rappels {notifications.active ? "activés" : "désactivés"}.</Text>
         <Pressable style={styles.secondaryButton} onPress={basculerRappels}>
           <Text style={styles.buttonText}>{rappelsActifs ? "🔕 Désactiver les rappels" : "🔔 Activer les rappels 08:00 / 18:00"}</Text>
         </Pressable>
@@ -332,13 +366,13 @@ export default function Haccp() {
                   onPress={() => setAfficherSelecteurPoint(!afficherSelecteurPoint)}
                 >
                   <Text style={styles.selectedPointText}>
-                    {pointsControle.find((p) => p.id === pointControleId)?.nom ?? "Point sélectionné"}
+                    {pointsAccessibles.find((p) => p.id === pointControleId)?.nom ?? "Point sélectionné"}
                   </Text>
                   <Text style={styles.dropdownArrow}>▼</Text>
                 </Pressable>
                 {afficherSelecteurPoint && (
                   <View style={styles.dropdown}>
-                    {pointsControle.map((point) => (
+                    {pointsAccessibles.map((point) => (
                       <Pressable
                         key={point.id}
                         style={styles.dropdownItem}
@@ -348,7 +382,7 @@ export default function Haccp() {
                         }}
                       >
                         <Text style={styles.dropdownItemText}>
-                          {point.nom} ({point.emplacement})
+                          {point.nom} ({point.zone})
                         </Text>
                       </Pressable>
                     ))}
@@ -365,10 +399,10 @@ export default function Haccp() {
             )}
             {afficherSelecteurPoint && !pointControleId && (
               <View style={styles.dropdown}>
-                {pointsControle.length === 0 ? (
+                {pointsAccessibles.length === 0 ? (
                   <Text style={styles.noPointsText}>Aucun point de contrôle configuré</Text>
                 ) : (
-                  pointsControle.map((point) => (
+                  pointsAccessibles.map((point) => (
                     <Pressable
                       key={point.id}
                       style={styles.dropdownItem}
@@ -378,7 +412,7 @@ export default function Haccp() {
                       }}
                     >
                       <Text style={styles.dropdownItemText}>
-                        {point.nom} ({point.emplacement})
+                        {point.nom} ({point.zone})
                       </Text>
                       <Text style={styles.pointTempRange}>
                         {point.temperatureMin ?? "-"}°C à {point.temperatureMax ?? "-"}°C

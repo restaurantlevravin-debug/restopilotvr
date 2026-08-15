@@ -1,4 +1,4 @@
-import { Link } from "expo-router";
+import { Link, type Href } from "expo-router";
 import {
   SafeAreaView,
   StyleSheet,
@@ -6,7 +6,11 @@ import {
   TouchableOpacity,
 } from "react-native";
 
+import { useUser } from "@/context/UserContext";
+
 export default function Home() {
+  const { utilisateurActif } = useUser();
+
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.logo}>🍷</Text>
@@ -32,6 +36,22 @@ export default function Home() {
           <Text style={styles.buttonText}>📋 HACCP</Text>
         </TouchableOpacity>
       </Link>
+
+      {utilisateurActif?.role === "GERANT" ? (
+        <Link href={"/dashboard-gerant" as Href} asChild>
+          <TouchableOpacity style={styles.imperialButton}>
+            <Text style={styles.buttonText}>👑 Dashboard Gérant</Text>
+          </TouchableOpacity>
+        </Link>
+      ) : null}
+
+      {utilisateurActif && utilisateurActif.role !== "GERANT" ? (
+        <Link href={"/profil-imperial" as Href} asChild>
+          <TouchableOpacity style={styles.imperialButton}>
+            <Text style={styles.buttonText}>👑 Mon profil impérial</Text>
+          </TouchableOpacity>
+        </Link>
+      ) : null}
 
       <TouchableOpacity style={styles.button}>
         <Text style={styles.buttonText}>📖 Fiches techniques</Text>
@@ -83,5 +103,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     textAlign: "center",
+  },
+
+  imperialButton: {
+    backgroundColor: "#17120A",
+    borderColor: "#D7A83E",
+    borderWidth: 1,
+    padding: 18,
+    borderRadius: 12,
+    marginBottom: 15,
   },
 });

@@ -10,10 +10,16 @@ import * as Notifications from "expo-notifications";
 import { useEntreprise } from "@/context/EntrepriseContext";
 import { useUser } from "@/context/UserContext";
 import { useValidation } from "@/context/ValidationContext";
+import { useRewards } from "@/context/RewardContext";
 import type {
   IdentiteValidation,
   ValidationAction,
 } from "@/types/validation";
+import type { ParametresAttributionPoints } from "@/types/reward";
+import type {
+  ControleRealise,
+  PointControleHaccp,
+} from "@/types/controleHaccp";
 
 
 export type UtilisateurTrace = {
@@ -50,6 +56,7 @@ export type ReleveTemperature = {
   dateValidation?:string;
   validation?:ValidationAction;
   dateSignature?:string;
+  controleRealiseId?:string;
 };
 
 export type TraceabiliteProduit = {
@@ -99,27 +106,14 @@ export type ScoreHaccp = {
 
 export type GradeHaccp = "PADAWAN HACCP" | "MONSTRE HACCP" | "EMPEREUR HACCP";
 
-export type CategoriePointControle = "Froid positif" | "Froid négatif" | "Chaud" | "Refroidissement" | "Autre";
-
-export type FrequenceControle = "matin" | "soir" | "matin-soir";
-
-export type PointControleTemperature = {
-  id: string;
-  nom: string;
-  emplacement: string;
-  categorie: CategoriePointControle;
-  temperatureMin?: number;
-  temperatureMax?: number;
-  frequence: FrequenceControle;
-  actif: boolean;
-  responsablesAssignes: string[];
-};
+export type PointControleTemperature = PointControleHaccp;
 
 type DonneesHaccp = {
   releves:ReleveTemperature[];
   traces:TraceabiliteProduit[];
   actions:ActionCorrective[];
-  pointsControle:PointControleTemperature[];
+  pointsControle:PointControleHaccp[];
+  controlesRealises:ControleRealise[];
   notifications:ReglagesNotifications;
   score:number;
   scoreHaccp:ScoreHaccp;
@@ -129,14 +123,17 @@ type HaccpContextType = DonneesHaccp & {
   ajouterReleve:(releve:Omit<ReleveTemperature,"id">) => Promise<void>;
   ajouterTrace:(trace:Omit<TraceabiliteProduit,"id">) => Promise<void>;
   ajouterAction:(action:Omit<ActionCorrective,"id">) => Promise<void>;
-  ajouterPointControle:(point:Omit<PointControleTemperature,"id">) => Promise<void>;
-  modifierPointControle:(id:string, point:Omit<PointControleTemperature,"id">) => Promise<void>;
-  supprimerPointControle:(id:string) => Promise<void>;
+  ajouterPointControle:(point:Omit<PointControleHaccp,"id" | "entrepriseId" | "creePar" | "dateCreation">) => Promise<boolean>;
+  modifierPointControle:(id:string, point:Partial<Omit<PointControleHaccp,"id" | "entrepriseId" | "creePar" | "dateCreation">>) => Promise<boolean>;
+  supprimerPointControle:(id:string) => Promise<boolean>;
+  obtenirPointsControleEntreprise:() => PointControleHaccp[];
+  enregistrerControleRealise:(controle:Omit<ControleRealise,"id" | "entrepriseId" | "utilisateurId">) => Promise<ControleRealise | null>;
+  validerControleRealise:(id:string, identite:IdentiteValidation) => Promise<boolean>;
   validerReleve:(id:number, identite?:IdentiteValidation) => Promise<boolean>;
   validerActionCorrective:(id:number, identite?:IdentiteValidation) => Promise<boolean>;
   signerRapportHaccp:() => Promise<boolean>;
   configurerNotifications:(reglages:Pick<ReglagesNotifications,"active" | "matinHeure" | "soirHeure">) => Promise<boolean>;
-  obtenirMesControles:() => PointControleTemperature[];
+  obtenirMesControles:() => PointControleHaccp[];
   obtenirReleve:(id:number) => ReleveTemperature | undefined;
   modifierReleve:(id:number, releve:Partial<Omit<ReleveTemperature,"id">>) => Promise<void>;
 };
@@ -159,6 +156,7 @@ const DONNEES_DEFAUT:DonneesHaccp = {
   traces:[],
   actions:[],
   pointsControle:[],
+  controlesRealises:[],
   notifications:REGLAGES_DEFAUT,
   score:0,
   scoreHaccp:{
@@ -172,6 +170,41 @@ const DONNEES_DEFAUT:DonneesHaccp = {
     oublisCritiques:0,
   },
 };
+
+type AncienPointControle = Partial<PointControleHaccp> & {
+  id:string;
+  emplacement?:string;
+  responsablesAssignes?:string[];
+};
+
+function normaliserPointControle(
+  point:AncienPointControle,
+  entrepriseId:string
+):PointControleHaccp {
+  const frequence = point.frequence === "QUOTIDIEN"
+    || point.frequence === "HEBDOMADAIRE"
+    || point.frequence === "AUTRE"
+    ? point.frequence
+    : "QUOTIDIEN";
+
+  return {
+    id:point.id,
+    entrepriseId:point.entrepriseId ?? entrepriseId,
+    nom:point.nom ?? "Point de contrôle",
+    description:point.description,
+    zone:point.zone ?? point.emplacement ?? "",
+    typeControle:point.typeControle ?? "TEMPERATURE",
+    frequence,
+    obligatoire:point.obligatoire ?? true,
+    actif:point.actif ?? true,
+    creePar:point.creePar ?? "MIGRATION",
+    dateCreation:point.dateCreation ?? new Date().toISOString(),
+    utilisateursAutorises:
+      point.utilisateursAutorises ?? point.responsablesAssignes ?? [],
+    temperatureMin:point.temperatureMin,
+    temperatureMax:point.temperatureMax,
+  };
+}
 
 const HaccpContext = createContext<HaccpContextType | null>(null);
 
@@ -212,6 +245,24 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
   const { entrepriseActive } = useEntreprise();
   const { utilisateurActif, verifierPermission } = useUser();
   const { validerAction } = useValidation();
+  const { ajouterProgression } = useRewards();
+
+  async function enregistrerProgression(
+    action:Omit<ParametresAttributionPoints,"entrepriseId">
+  ) {
+    if (!entrepriseActive) {
+      return;
+    }
+
+    try {
+      await ajouterProgression({
+        ...action,
+        entrepriseId:entrepriseActive.id,
+      });
+    } catch (error) {
+      console.error("Erreur progression impériale", error);
+    }
+  }
 
   function creerTraceUtilisateur() {
     if (!utilisateurActif) {
@@ -276,7 +327,21 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
         releves:donneesChargees.releves || [],
         traces:donneesChargees.traces || [],
         actions:donneesChargees.actions || [],
-        pointsControle:donneesChargees.pointsControle || [],
+        pointsControle:(donneesChargees.pointsControle || [])
+          .map((point) => normaliserPointControle(
+            point as AncienPointControle,
+            entrepriseActive.id
+          ))
+          .filter((point) => point.entrepriseId === entrepriseActive.id),
+        controlesRealises:(donneesChargees.controlesRealises || [])
+          .filter((controle) => controle.entrepriseId === entrepriseActive.id)
+          .map((controle) => ({
+            ...controle,
+            valeur:controle.valeur ?? (controle as ControleRealise & { resultat?:string }).resultat,
+            conforme:controle.conforme ?? false,
+            statutValidation:controle.statutValidation
+              ?? (controle.validation ? "VALIDE" : controle.conforme ? "CLOS" : "EN_ATTENTE"),
+          })),
         notifications:{
           ...REGLAGES_DEFAUT,
           ...donneesChargees.notifications,
@@ -315,15 +380,80 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
   async function ajouterReleve(releve:Omit<ReleveTemperature,"id">){
 
     const traceUtilisateur = creerTraceUtilisateur();
+    if (releve.pointControleId) {
+      const pointAutorise = donnees.pointsControle.some((point) =>
+        point.id === releve.pointControleId
+        && point.entrepriseId === entrepriseActive?.id
+        && point.actif
+        && (utilisateurActif?.role === "GERANT"
+          || (utilisateurActif ? point.utilisateursAutorises.includes(utilisateurActif.id) : false))
+      );
+      if (!pointAutorise) {
+        throw new Error("Point de contrôle inactif, externe ou non attribué");
+      }
+    }
+    const releveId = Date.now();
+    const controleRealiseId = `${releveId}-${Math.random().toString(16).slice(2)}`;
     const points = calculerPointsReleve(releve);
     const progression = calculerProgressionHaccp(donnees.scoreHaccp, releve.conforme, !releve.conforme && Boolean(releve.photo), points);
 
     await sauvegarder({
       ...donnees,
-      releves:[...donnees.releves, { id:Date.now(), ...releve, effectuePar: traceUtilisateur }],
+      releves:[...donnees.releves, {
+        id:releveId,
+        ...releve,
+        effectuePar:traceUtilisateur,
+        controleRealiseId:releve.pointControleId ? controleRealiseId : undefined,
+      }],
+      controlesRealises:releve.pointControleId && traceUtilisateur && entrepriseActive
+        ? [
+            ...donnees.controlesRealises,
+            {
+              id:controleRealiseId,
+              pointControleId:releve.pointControleId,
+              utilisateurId:traceUtilisateur.id,
+              entrepriseId:entrepriseActive.id,
+              date:releve.date,
+              heure:releve.heure,
+              valeur:releve.temperature,
+              conforme:releve.conforme,
+              photo:releve.photo,
+              commentaire:releve.commentaireAnomalie,
+              actionCorrective:releve.actionCorrective,
+              statutValidation:releve.conforme ? "CLOS" : "EN_ATTENTE",
+            },
+          ]
+        : donnees.controlesRealises,
       score:donnees.score + points + progression.pointsRecompense,
       scoreHaccp:progression.scoreHaccp,
     });
+
+    if (traceUtilisateur) {
+      await enregistrerProgression({
+        utilisateurId:traceUtilisateur.id,
+        typeAction:"RELEVE_TEMPERATURE",
+        conformite:releve.conforme,
+        validation:false,
+      });
+    }
+
+    if (traceUtilisateur && releve.photo) {
+      await enregistrerProgression({
+        utilisateurId:traceUtilisateur.id,
+        typeAction:"PREUVE_PHOTO",
+        conformite:releve.conforme,
+        validation:false,
+      });
+    }
+
+    if (traceUtilisateur && !releve.conforme && releve.anomalieTraitee) {
+      await enregistrerProgression({
+        utilisateurId:traceUtilisateur.id,
+        typeAction:"ANOMALIE_TRAITEE",
+        conformite:true,
+        validation:false,
+      });
+    }
 
   }
 
@@ -340,45 +470,177 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
 
   async function ajouterAction(action:Omit<ActionCorrective,"id">){
 
+    const traceUtilisateur = creerTraceUtilisateur();
+
     await sauvegarder({
       ...donnees,
-      actions:[...donnees.actions, { id:Date.now(), ...action, effectuePar: creerTraceUtilisateur() }],
+      actions:[...donnees.actions, { id:Date.now(), ...action, effectuePar: traceUtilisateur }],
     });
 
   }
 
 
-  async function ajouterPointControle(point:Omit<PointControleTemperature,"id">){
+  async function ajouterPointControle(
+    point:Omit<PointControleHaccp,"id" | "entrepriseId" | "creePar" | "dateCreation">
+  ):Promise<boolean>{
+    if (utilisateurActif?.role !== "GERANT" || !entrepriseActive) {
+      return false;
+    }
 
+    const nouveau:PointControleHaccp = {
+      ...point,
+      id:`${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      entrepriseId:entrepriseActive.id,
+      creePar:utilisateurActif.id,
+      dateCreation:new Date().toISOString(),
+      utilisateursAutorises:point.utilisateursAutorises ?? [],
+    };
     await sauvegarder({
       ...donnees,
-      pointsControle:[...donnees.pointsControle, { id:Date.now().toString(), ...point, responsablesAssignes: point.responsablesAssignes || [] }],
+      pointsControle:[...donnees.pointsControle, nouveau],
     });
-
+    return true;
   }
 
 
-  async function modifierPointControle(id:string, point:Omit<PointControleTemperature,"id">){
+  async function modifierPointControle(
+    id:string,
+    point:Partial<Omit<PointControleHaccp,"id" | "entrepriseId" | "creePar" | "dateCreation">>
+  ):Promise<boolean>{
+    if (utilisateurActif?.role !== "GERANT" || !entrepriseActive) {
+      return false;
+    }
 
-    const pointsControleModifies = donnees.pointsControle.map((p) =>
-      p.id === id ? { id, ...point } : p
+    const existe = donnees.pointsControle.some(
+      (controle) => controle.id === id && controle.entrepriseId === entrepriseActive.id
+    );
+    if (!existe) {
+      return false;
+    }
+
+    const pointsControleModifies = donnees.pointsControle.map((controle) =>
+      controle.id === id ? { ...controle, ...point } : controle
     );
 
     await sauvegarder({
       ...donnees,
       pointsControle:pointsControleModifies,
     });
-
+    return true;
   }
 
 
-  async function supprimerPointControle(id:string){
+  async function supprimerPointControle(id:string):Promise<boolean>{
+    if (utilisateurActif?.role !== "GERANT" || !entrepriseActive) {
+      return false;
+    }
+
+    const existe = donnees.pointsControle.some(
+      (controle) => controle.id === id && controle.entrepriseId === entrepriseActive.id
+    );
+    if (!existe) {
+      return false;
+    }
+    await sauvegarder({
+      ...donnees,
+      pointsControle:donnees.pointsControle.filter((controle) => controle.id !== id),
+    });
+    return true;
+  }
+
+  function obtenirPointsControleEntreprise():PointControleHaccp[] {
+    return donnees.pointsControle.filter(
+      (controle) => controle.entrepriseId === entrepriseActive?.id
+    );
+  }
+
+  async function enregistrerControleRealise(
+    controle:Omit<ControleRealise,"id" | "entrepriseId" | "utilisateurId">
+  ):Promise<ControleRealise | null> {
+    if (!utilisateurActif || !entrepriseActive) {
+      return null;
+    }
+
+    const point = donnees.pointsControle.find(
+      (element) =>
+        element.id === controle.pointControleId
+        && element.entrepriseId === entrepriseActive.id
+        && element.actif
+        && (utilisateurActif.role === "GERANT"
+          || element.utilisateursAutorises.includes(utilisateurActif.id))
+    );
+    if (!point) {
+      return null;
+    }
+
+    const nouveau:ControleRealise = {
+      ...controle,
+      id:`${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      entrepriseId:entrepriseActive.id,
+      utilisateurId:utilisateurActif.id,
+    };
+    await sauvegarder({
+      ...donnees,
+      controlesRealises:[...donnees.controlesRealises, nouveau],
+    });
+
+    await enregistrerProgression({
+      utilisateurId:utilisateurActif.id,
+      typeAction:"CONTROLE_HACCP",
+      conformite:controle.conforme,
+      validation:Boolean(controle.validation),
+    });
+    if (controle.photo) {
+      await enregistrerProgression({
+        utilisateurId:utilisateurActif.id,
+        typeAction:"PREUVE_PHOTO",
+        conformite:controle.conforme,
+        validation:false,
+      });
+    }
+    return nouveau;
+  }
+
+  async function validerControleRealise(
+    id:string,
+    identite:IdentiteValidation
+  ):Promise<boolean> {
+    const controle = donnees.controlesRealises.find(
+      (element) => element.id === id && element.entrepriseId === entrepriseActive?.id
+    );
+    if (!controle || controle.statutValidation !== "EN_ATTENTE") {
+      return false;
+    }
+    const validation = await validerAction({
+      actionType:"HACCP_CONTROLE_NON_CONFORME",
+      actionId:id,
+      ...identite,
+    });
+    if (!validation) return false;
 
     await sauvegarder({
       ...donnees,
-      pointsControle:donnees.pointsControle.filter((p) => p.id !== id),
+      controlesRealises:donnees.controlesRealises.map((element) =>
+        element.id === id
+          ? { ...element, validation, statutValidation:"VALIDE" as const }
+          : element
+      ),
     });
-
+    if (controle.actionCorrective) {
+      await enregistrerProgression({
+        utilisateurId:controle.utilisateurId,
+        typeAction:"ACTION_CORRECTIVE_VALIDEE",
+        conformite:true,
+        validation:true,
+      });
+    }
+    await enregistrerProgression({
+      utilisateurId:validation.valideParUtilisateurId,
+      typeAction:"VALIDATION_RESPONSABLE",
+      conformite:true,
+      validation:true,
+    });
+    return true;
   }
 
 
@@ -403,6 +665,7 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
       return false;
     }
 
+    const releveValide = donnees.releves.find((releve) => releve.id === id);
     const relevésMisAJour = donnees.releves.map((releve) => {
       if (releve.id !== id) {
         return releve;
@@ -424,7 +687,28 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
     await sauvegarder({
       ...donnees,
       releves: relevésMisAJour,
+      controlesRealises:donnees.controlesRealises.map((controle) =>
+        controle.id === releveValide?.controleRealiseId
+          ? { ...controle, validation }
+          : controle
+      ),
     });
+
+    await enregistrerProgression({
+      utilisateurId:validation.valideParUtilisateurId,
+      typeAction:"VALIDATION_RESPONSABLE",
+      conformite:releveValide?.conforme ?? false,
+      validation:true,
+    });
+
+    if (releveValide?.conforme && releveValide.effectuePar) {
+      await enregistrerProgression({
+        utilisateurId:releveValide.effectuePar.id,
+        typeAction:"RELEVE_CONFORME_VALIDE",
+        conformite:true,
+        validation:true,
+      });
+    }
 
     return true;
   }
@@ -454,6 +738,7 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
       return false;
     }
 
+    const actionValidee = donnees.actions.find((action) => action.id === id);
     const actionsMisesAJour = donnees.actions.map((action) =>
       action.id === id
         ? {
@@ -472,6 +757,22 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
     await sauvegarder({
       ...donnees,
       actions:actionsMisesAJour,
+    });
+
+    if (actionValidee?.effectuePar) {
+      await enregistrerProgression({
+        utilisateurId:actionValidee.effectuePar.id,
+        typeAction:"ACTION_CORRECTIVE_VALIDEE",
+        conformite:true,
+        validation:true,
+      });
+    }
+
+    await enregistrerProgression({
+      utilisateurId:validation.valideParUtilisateurId,
+      typeAction:"VALIDATION_RESPONSABLE",
+      conformite:true,
+      validation:true,
     });
 
     return true;
@@ -612,19 +913,23 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
   }
 
 
-  function obtenirMesControles(): PointControleTemperature[] {
-    if (!utilisateurActif) {
+  function obtenirMesControles(): PointControleHaccp[] {
+    if (!utilisateurActif || !entrepriseActive) {
       return [];
     }
 
-    // GERANT voit tous les contrôles
     if (utilisateurActif.role === "GERANT") {
-      return donnees.pointsControle.filter((p) => p.actif);
+      return donnees.pointsControle.filter(
+        (controle) =>
+          controle.entrepriseId === entrepriseActive.id && controle.actif
+      );
     }
 
-    // Les autres rôles ne voient que les contrôles qui leur sont assignés
     return donnees.pointsControle.filter(
-      (p) => p.actif && p.responsablesAssignes.includes(utilisateurActif.id)
+      (controle) =>
+        controle.entrepriseId === entrepriseActive.id
+        && controle.actif
+        && controle.utilisateursAutorises.includes(utilisateurActif.id)
     );
   }
 
@@ -663,6 +968,9 @@ export function HaccpProvider({ children }:{ children:React.ReactNode }) {
         ajouterPointControle,
         modifierPointControle,
         supprimerPointControle,
+        obtenirPointsControleEntreprise,
+        enregistrerControleRealise,
+        validerControleRealise,
         validerReleve,
         validerActionCorrective,
         signerRapportHaccp,
