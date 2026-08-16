@@ -25,6 +25,7 @@ import { useRewards } from "@/context/RewardContext";
 import { useUser } from "@/context/UserContext";
 import { useValidation } from "@/context/ValidationContext";
 import { useValidationHeures } from "@/context/ValidationHeuresContext";
+import { construirePresenceJournee } from "@/services/tempsTravailService";
 import type {
   AlerteDashboard,
   DashboardEntreprise,
@@ -91,7 +92,7 @@ export default function DashboardGerant() {
   const { validations } = useValidation();
   const { obtenirProfilImperial } = useRewards();
   const { obtenirPointagesGerant } = usePointagePad();
-  const { obtenirComparaisonPlanningPointage } = usePlanning();
+  const { obtenirComparaisonPlanningPointage, obtenirPlanningEntreprise } = usePlanning();
   const { creerValidationMensuelle, obtenirValidationMensuelle, obtenirSyntheseMois } = useValidationHeures();
   const {
     clotureExploitation,
@@ -310,6 +311,47 @@ export default function DashboardGerant() {
   const salariesActifs = new Set(
     pointagesDuJour.map((pointage) => pointage.utilisateurId)
   ).size;
+  const planningDuMois = obtenirPlanningEntreprise(
+    maintenant.getMonth() + 1,
+    maintenant.getFullYear()
+  );
+  const presencesDuJour = utilisateurs.flatMap((utilisateur) => {
+    if (
+      utilisateur.entrepriseId !== entrepriseActive.id
+      || !utilisateur.actif
+      || utilisateur.role === "GERANT"
+    ) return [];
+    const ligne = planningDuMois?.lignes.find(
+      (element) => element.utilisateurId === utilisateur.id
+    );
+    const jour = ligne?.jours.find((element) => element.date === dateIso);
+    const pointagesUtilisateur = pointagesDuJour.filter(
+      (pointage) => pointage.utilisateurId === utilisateur.id
+    );
+    if (!jour?.matin.heureDebut && !jour?.soir.heureDebut && pointagesUtilisateur.length === 0) {
+      return [];
+    }
+    return [construirePresenceJournee({
+      entrepriseId: entrepriseActive.id,
+      utilisateurId: utilisateur.id,
+      date: dateIso,
+      jour,
+      pointages: pointagesUtilisateur,
+    })];
+  });
+  const presentsAujourdHui = presencesDuJour.filter(
+    (presence) => presence.statut !== "NON_ARRIVE"
+  ).length;
+  const absentsAujourdHui = presencesDuJour.filter(
+    (presence) => presence.statut === "NON_ARRIVE"
+  ).length;
+  const retardsAujourdHui = presencesDuJour.filter(
+    (presence) => Boolean(presence.arrivee && presence.horairePrevu)
+      && presence.ecartMinutes > 0
+  ).length;
+  const enServiceActuellement = presencesDuJour.filter(
+    (presence) => presence.statut === "EN_SERVICE"
+  ).length;
   const soldesPointage = new Map<string, number>();
   pointagesDuJour.forEach((pointage) => {
     const variation = pointage.type === "ARRIVEE" ? 1 : -1;
@@ -411,6 +453,17 @@ export default function DashboardGerant() {
             <Stat label="Correctives ouvertes" value={String(dashboard.scoreHaccp.actionsCorrectivesOuvertes)} />
           </View>
         </View>
+
+        <SectionTitre>⏱️ Présence équipe</SectionTitre>
+        <Pressable style={styles.carteStandard} onPress={() => router.push("/presence-jour" as Href)}>
+          <View style={styles.grilleStats}>
+            <Stat label="Présents aujourd’hui" value={String(presentsAujourdHui)} />
+            <Stat label="Absents" value={String(absentsAujourdHui)} />
+            <Stat label="Retards" value={String(retardsAujourdHui)} />
+            <Stat label="En service" value={String(enServiceActuellement)} />
+          </View>
+          <Text style={styles.lienDocuments}>Voir la présence de l’équipe aujourd’hui ›</Text>
+        </Pressable>
 
         <SectionTitre>⏱️ Suivi des heures</SectionTitre>
         <Pressable style={styles.carteStandard} onPress={() => router.push("/planning/ecarts" as Href)}>
