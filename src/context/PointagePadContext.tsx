@@ -258,7 +258,10 @@ export function PointagePadProvider({
   }
 
   function obtenirPointagesGerant(date?: string): Pointage[] {
-    if (!hasPermission(utilisateurActif, "gestionPointage")) {
+    if (
+      !hasPermission(utilisateurActif, "gestionPointage")
+      && !hasPermission(utilisateurActif, "consultationValidationsHeures")
+    ) {
       return [];
     }
 

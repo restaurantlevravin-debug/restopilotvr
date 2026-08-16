@@ -480,7 +480,7 @@ export default function DashboardGerant() {
         <Pressable style={styles.carteStandard} onPress={() => router.push("/planning/validation-heures" as Href)}>
           <View style={styles.grilleStats}>
             <Stat label="Mois en cours" value={new Date(anneeValidation, moisValidation - 1).toLocaleDateString("fr-FR", { month: "long", year: "numeric" })} />
-            <Stat label="Heures à valider" value={formaterMinutes(syntheseHeures?.totalRealiseMinutes ?? 0)} />
+            <Stat label="Heures en attente" value={formaterMinutes(syntheseHeures?.totalRealiseMinutes ?? 0)} />
             <Stat label="Statut" value={(validationHeures?.statut ?? "EN_COURS").replaceAll("_", " ")} />
           </View>
           <Text style={styles.lienDocuments}>Contrôler et valider le mois ›</Text>

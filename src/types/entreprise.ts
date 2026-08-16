@@ -10,6 +10,7 @@ export type Permission =
   | "configurationHaccp"
   | "gestionPlanning"
   | "gestionPointage"
+  | "consultationValidationsHeures"
   | "validationAction"
   | "validationJournee";
 

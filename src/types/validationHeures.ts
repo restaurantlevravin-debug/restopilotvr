@@ -3,11 +3,12 @@ export type StatutValidationHeures = "EN_COURS" | "A_VALIDER" | "VALIDEE";
 export type ValidationHeuresMensuelle = {
   id: string;
   entrepriseId: string;
-  mois: string;
+  mois: number;
   annee: number;
   statut: StatutValidationHeures;
   validePar?: string;
   dateValidation?: string;
+  commentaire?: string;
   remarques: Record<string, string>;
 };
 

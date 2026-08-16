@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useState } from "react";
 
+import { hasPermission } from "@/constants/permissions";
 import { obtenirCleStockagePlannings, obtenirCleStockagePlanningsRecurrents } from "@/constants/storage";
 import { useEntreprise } from "@/context/EntrepriseContext";
 import { useUser } from "@/context/UserContext";
@@ -195,7 +196,7 @@ export function PlanningProvider({ children }: { children: React.ReactNode }) {
   }
 
   function obtenirPlanningEntreprise(mois: number, annee: number) {
-    if (utilisateurActif?.role !== "GERANT") return undefined;
+    if (!hasPermission(utilisateurActif, "consultationValidationsHeures")) return undefined;
     return plannings.find((p) => p.entrepriseId === entrepriseActive?.id && p.mois === mois && p.annee === annee);
   }
 
